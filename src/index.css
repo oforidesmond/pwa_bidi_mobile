@@ -1,0 +1,1629 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap');
+
+:root {
+  --surface-bg: #0a0f0c;
+  --surface-elevated: #14201a;
+  --surface-sunken: #1c2a22;
+  --text-primary: #f2f7f4;
+  --text-secondary: rgba(242, 247, 244, 0.64);
+  --text-tertiary: rgba(242, 247, 244, 0.4);
+  --divider: rgba(242, 247, 244, 0.08);
+  --accent-tint: rgba(57, 181, 74, 0.16);
+  --scrim: rgba(0, 0, 0, 0.5);
+  --radius: 12px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Framed app stage — phone default matches legacy 430px shell */
+  --stage-max: 430px;
+  --content-gutter: 16px;
+  --stage-margin-y: 0px;
+  --stage-radius: 0px;
+  --stage-border: none;
+  --stage-shadow: none;
+  --dock-label-size: 11px;
+  --dock-pad-x: 8px;
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  min-height: 100dvh;
+  background-color: var(--surface-bg);
+  background-image:
+    radial-gradient(ellipse 90% 60% at 50% -10%, color-mix(in srgb, var(--brand-accent, #39b54a) 14%, transparent), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 100% 100%, color-mix(in srgb, #003a1d 35%, transparent), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 0% 80%, color-mix(in srgb, var(--accent-tint) 55%, transparent), transparent 45%);
+  background-attachment: fixed;
+  color: var(--text-primary);
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+html[data-theme='light'],
+html[data-theme='light'] body,
+html[data-theme='light'] #root {
+  background-image:
+    radial-gradient(ellipse 90% 55% at 50% -8%, color-mix(in srgb, var(--brand-accent, #39b54a) 18%, transparent), transparent 55%),
+    radial-gradient(ellipse 65% 45% at 100% 100%, color-mix(in srgb, #003a1d 8%, transparent), transparent 50%),
+    radial-gradient(ellipse 55% 40% at 0% 85%, color-mix(in srgb, var(--accent-tint) 70%, transparent), transparent 45%);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined', sans-serif;
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* App stage (legacy class: bidi-phone-shell) */
+.bidi-phone-shell,
+.bidi-app-stage {
+  margin: var(--stage-margin-y) auto;
+  width: 100%;
+  max-width: min(var(--stage-max), 100%);
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--surface-bg);
+  border-radius: var(--stage-radius);
+  border: var(--stage-border);
+  box-shadow: var(--stage-shadow);
+  overflow: hidden;
+}
+
+.bidi-phone-shell__main {
+  flex: 1;
+  overflow: auto;
+  padding-bottom: calc(88px + var(--safe-bottom));
+  min-height: 0;
+}
+
+/* Glass tab bar / dock — absolute so it docks to the stage, not the viewport */
+.bidi-tab-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 8px var(--dock-pad-x) calc(10px + var(--safe-bottom));
+  background: color-mix(in srgb, var(--surface-elevated) 85%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--divider);
+  z-index: 40;
+}
+
+.bidi-tab-bar__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px;
+  text-decoration: none;
+  color: var(--text-tertiary);
+  font-size: var(--dock-label-size);
+  font-weight: 600;
+  background: none;
+  border: none;
+  border-radius: 10px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.bidi-tab-bar__item--active {
+  color: var(--brand-accent);
+}
+
+.bidi-tab-bar__icon {
+  font-size: 24px;
+}
+
+/* Pages */
+.bidi-scroll-page {
+  min-height: 100%;
+}
+
+.bidi-scroll-inner {
+  padding: var(--content-gutter) var(--content-gutter) 24px;
+  max-width: 100%;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.bidi-page--auth {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+.bidi-auth-card-wrap {
+  width: 100%;
+  max-width: 420px;
+}
+
+.bidi-auth-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.bidi-auth-logo {
+  display: block;
+  margin: 0 auto;
+  width: min(200px, 50%);
+  height: auto;
+  aspect-ratio: 1200 / 636;
+  object-fit: contain;
+}
+
+.bidi-auth-title {
+  margin: 16px 0 4px;
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.bidi-auth-subtitle {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.bidi-page-title {
+  margin: 0 0 8px;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.bidi-page-subtitle {
+  margin: 0 0 16px;
+  font-size: 0.95rem;
+}
+
+.bidi-page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.bidi-section-title {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+/* Cards */
+.bidi-card {
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 12px 24px rgba(0, 58, 29, 0.12);
+}
+
+/* Wallet gradient card */
+.bidi-wallet-card-wrap {
+  filter: drop-shadow(0 12px 24px rgba(0, 58, 29, 0.35));
+  margin-bottom: 12px;
+}
+
+.bidi-wallet-card {
+  position: relative;
+  border-radius: 20px;
+  padding: 20px;
+  min-height: 160px;
+  overflow: hidden;
+  background: var(--wallet-grad);
+}
+
+.bidi-wallet-card__shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.bidi-wallet-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.bidi-wallet-card__logo {
+  width: 72px;
+  height: auto;
+  aspect-ratio: 5061 / 2686;
+  object-fit: contain;
+  opacity: 0.9;
+}
+
+.bidi-wallet-card__label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.bidi-wallet-card__balance-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bidi-wallet-card__balance {
+  font-size: clamp(1.75rem, 6vw, 2.25rem);
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+}
+
+.bidi-wallet-card__pending {
+  margin-top: 8px;
+  font-size: 0.85rem;
+}
+
+.bidi-wallet-card__footer {
+  margin-top: 16px;
+}
+
+/* Token artifact */
+.bidi-token-card-wrap {
+  filter: drop-shadow(0 12px 24px rgba(0, 58, 29, 0.35));
+  margin-bottom: 16px;
+}
+
+.bidi-token-card {
+  position: relative;
+  border: none;
+  width: 100%;
+  text-align: left;
+  border-radius: 20px;
+  padding: 20px;
+  overflow: hidden;
+  color: inherit;
+}
+
+.bidi-token-card__shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.bidi-token-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.bidi-token-card__header-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.bidi-token-card__eyebrow {
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+
+.bidi-token-card__amount {
+  font-size: 1.65rem;
+  font-weight: 700;
+}
+
+.bidi-token-card__pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.bidi-token-card__code {
+  margin-top: 12px;
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+}
+
+.bidi-token-card__issued {
+  margin-top: 4px;
+  font-size: 0.85rem;
+}
+
+.bidi-token-card__actions {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--on-gradient-overlay, rgba(255, 255, 255, 0.2));
+}
+
+.bidi-artifact-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 72px;
+  min-height: 48px;
+  background: none;
+  border: none;
+  color: inherit;
+}
+
+.bidi-artifact-action__label {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Buttons */
+.bidi-btn {
+  width: 100%;
+  border-radius: var(--radius);
+  min-height: 52px;
+  font-weight: 600;
+  font-size: 1rem;
+  border: none;
+}
+
+.bidi-btn--primary {
+  background: var(--brand-accent);
+  color: #fff;
+}
+
+.bidi-btn--primary:disabled {
+  opacity: 0.5;
+}
+
+.bidi-btn--secondary {
+  background: var(--accent-tint);
+  color: var(--brand-accent);
+  border: 1px solid var(--brand-accent);
+}
+
+.bidi-btn--outline {
+  background: transparent;
+  color: var(--brand-accent);
+  border: 2px solid var(--brand-accent);
+}
+
+.bidi-btn--danger-outline {
+  background: transparent;
+  color: var(--color-error);
+  border: 2px solid var(--color-error);
+}
+
+.bidi-btn--danger {
+  background: var(--color-error);
+  color: #fff;
+}
+
+.bidi-btn-text {
+  background: none;
+  border: none;
+  width: 100%;
+  font-weight: 600;
+  padding: 8px;
+}
+
+.bidi-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+}
+
+.bidi-icon-btn:disabled {
+  opacity: 0.4;
+}
+
+/* Inputs */
+.bidi-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bidi-field__label {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.bidi-field__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius);
+  padding: 0 12px;
+  min-height: 52px;
+}
+
+.bidi-field__prefix {
+  opacity: 0.6;
+  font-size: 22px;
+}
+
+.bidi-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.bidi-input--multiline {
+  width: 100%;
+  min-height: 80px;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--divider);
+  resize: vertical;
+}
+
+.bidi-affix {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.bidi-field__error {
+  color: var(--color-error);
+  font-size: 0.8rem;
+}
+
+.bidi-hint {
+  font-size: 0.85rem;
+  margin: 4px 0 0;
+}
+
+.bidi-mt-2 {
+  margin-top: 8px;
+}
+.bidi-mt-3 {
+  margin-top: 16px;
+}
+.bidi-mt-4 {
+  margin-top: 24px;
+}
+
+/* Link */
+.bidi-link-driver {
+  display: block;
+  text-align: center;
+  margin-top: 16px;
+  color: var(--brand-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.bidi-link {
+  background: none;
+  border: none;
+  font-weight: 600;
+  padding: 4px;
+}
+
+.bidi-inline-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.bidi-row-links {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+/* Banner */
+.bidi-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+
+.bidi-banner__icon {
+  flex-shrink: 0;
+}
+
+.bidi-banner__text {
+  flex: 1;
+  margin: 0;
+  line-height: 1.35;
+  font-size: 0.95rem;
+}
+
+.bidi-banner__dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--brand-accent);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+/* Segmented */
+.bidi-segmented {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--surface-sunken);
+  margin-bottom: 12px;
+}
+
+.bidi-segmented__btn {
+  flex: 1;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 8px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+/* Lists */
+.bidi-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bidi-list-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: none;
+  border-radius: 16px;
+  padding: 14px;
+  text-align: left;
+}
+
+.bidi-list-row__mid {
+  flex: 1;
+  min-width: 0;
+}
+
+.bidi-list-row__title {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.bidi-list-row__sub {
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.bidi-list-row__amt {
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.bidi-category-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Chip */
+.bidi-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.bidi-chip--small {
+  font-size: 0.8rem;
+  padding: 4px 8px;
+}
+
+.bidi-chip--copy {
+  background: var(--accent-tint);
+  color: var(--brand-accent-600);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* Empty state */
+.bidi-empty-state {
+  margin: 16px 0;
+  padding: 40px 24px;
+  border-radius: 20px;
+  text-align: center;
+}
+
+.bidi-empty-state__title {
+  margin: 16px 0 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.bidi-empty-state__subtitle {
+  margin: 8px 0 0;
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+
+/* Sheet */
+.bidi-sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.bidi-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.bidi-sheet-panel {
+  position: relative;
+  width: min(var(--stage-max), 100%);
+  max-height: 88vh;
+  overflow: auto;
+  background: var(--surface-elevated);
+  border-radius: 20px 20px 0 0;
+  padding: 8px 20px calc(20px + var(--safe-bottom));
+  animation: bidi-sheet-in 0.22s ease-out;
+  z-index: 1;
+}
+
+@keyframes bidi-sheet-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0.92;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes bidi-modal-in {
+  from {
+    transform: translateY(8px) scale(0.97);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.bidi-sheet-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--divider);
+  margin: 4px auto 12px;
+}
+
+.bidi-sheet-body {
+  padding-bottom: 8px;
+}
+
+.bidi-sheet-title {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.bidi-sheet-message {
+  margin: 0 0 16px;
+  line-height: 1.45;
+}
+
+.bidi-dialog-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* PWA install prompt */
+.bidi-install-sheet {
+  text-align: center;
+}
+
+.bidi-install-logo-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0 16px;
+}
+
+.bidi-install-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.bidi-install-steps {
+  text-align: left;
+  margin: 0 0 16px;
+  padding-left: 1.25rem;
+  line-height: 1.55;
+  font-size: 0.95rem;
+}
+
+.bidi-install-steps li + li {
+  margin-top: 8px;
+}
+
+.bidi-install-sheet .bidi-dialog-actions {
+  margin-top: 4px;
+}
+
+/* Snackbar */
+.bidi-snackbar {
+  position: fixed;
+  left: 50%;
+  transform: translate(-50%, 120%);
+  bottom: calc(88px + var(--safe-bottom) + var(--stage-margin-y));
+  z-index: 200;
+  width: calc(100% - 32px);
+  max-width: min(420px, var(--stage-max));
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  font-size: 0.95rem;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.bidi-snackbar--visible {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+
+/* Loading / overlay */
+.bidi-app-loading {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bidi-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--divider);
+  border-top-color: var(--brand-accent);
+  border-radius: 50%;
+  animation: bidi-spin 0.8s linear infinite;
+}
+
+.bidi-spinner--small {
+  width: 24px;
+  height: 24px;
+  border-width: 2px;
+}
+
+@keyframes bidi-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.bidi-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bidi-skeleton {
+  border-radius: 20px;
+  min-height: 160px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    var(--surface-elevated) 50%,
+    var(--surface-sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: bidi-shimmer 1.2s ease infinite;
+}
+
+@keyframes bidi-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* MoMo trust */
+.bidi-momo-trust {
+  margin-top: 28px;
+  text-align: center;
+  padding: 0 16px;
+}
+
+.bidi-momo-trust--compact {
+  margin-top: 16px;
+  padding: 0;
+}
+
+.bidi-momo-trust__row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+}
+
+.bidi-momo-trust__line {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.bidi-momo-trust__logos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.bidi-momo-trust__logos--compact {
+  margin-top: 10px;
+  gap: 10px;
+}
+
+.bidi-momo-trust__logo {
+  display: block;
+  object-fit: contain;
+}
+
+.bidi-momo-trust__nets {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+}
+
+/* Momo badge */
+.bidi-momo-badge {
+  display: inline-flex;
+  align-items: center;
+}
+
+.bidi-momo-badge__logo {
+  display: block;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.bidi-momo-badge--unknown {
+  border: 2px solid #9ca3af;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Footer */
+.bidi-auth-footer {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+/* Profile */
+.bidi-profile-hero {
+  text-align: center;
+  padding: 24px 20px;
+}
+
+.bidi-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 999px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.bidi-profile-name {
+  margin: 16px 0 4px;
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.bidi-profile-sub {
+  margin: 0;
+}
+
+.bidi-account-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.bidi-account-list li {
+  display: flex;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--divider);
+}
+
+.bidi-account-list li:last-child {
+  border-bottom: none;
+}
+
+.bidi-account-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Token detail */
+.bidi-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px var(--content-gutter) 0;
+  max-width: 100%;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.bidi-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  text-decoration: none;
+  border-radius: 10px;
+}
+
+.bidi-detail-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.bidi-detail-body {
+  margin-top: 12px;
+  line-height: 1.5;
+}
+
+.bidi-qr-block {
+  margin-top: 16px;
+  border-radius: 20px;
+  padding: 24px;
+  text-align: center;
+}
+
+.bidi-qr-inner {
+  display: inline-block;
+  padding: 16px;
+  border-radius: 16px;
+}
+
+.bidi-qr-amount {
+  margin-top: 16px;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.bidi-qr-code-text {
+  margin-top: 8px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+
+.bidi-token-mono {
+  font-family: ui-monospace, monospace;
+  word-break: break-all;
+}
+
+/* Sell page */
+.bidi-token-field-wrap {
+  position: relative;
+}
+
+.bidi-dropdown {
+  margin-top: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--divider);
+  max-height: 220px;
+  overflow: auto;
+}
+
+.bidi-dropdown__row {
+  padding: 12px 16px;
+}
+
+.bidi-dropdown__item {
+  width: 100%;
+  text-align: left;
+  padding: 12px 16px;
+  border: none;
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.bidi-dropdown__item:hover {
+  filter: brightness(1.05);
+}
+
+.bidi-detail-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.bidi-detail-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--divider);
+  font-size: 0.95rem;
+}
+
+.bidi-detail-list li:last-child {
+  border-bottom: none;
+}
+
+.bidi-picker-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.bidi-picker-item {
+  text-align: left;
+  padding: 14px 16px;
+  border: none;
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--divider);
+  font-size: 1rem;
+}
+
+.bidi-picker-item:last-child {
+  border-bottom: none;
+}
+
+/* QR scanner modal body */
+.bidi-qr-scanner {
+  padding: 8px 0;
+}
+
+.bidi-qr-scanner__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.bidi-qr-scanner__title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.bidi-qr-scanner__video-wrap {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #000;
+  aspect-ratio: 4 / 3;
+}
+
+.bidi-qr-scanner__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bidi-qr-scanner__error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  color: #fff;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.bidi-qr-scanner__hint {
+  margin: 12px 0 0;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+/* Ledger sheet */
+.bidi-ledger-hero {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.bidi-ledger-hero-amt {
+  font-size: 2rem;
+  font-weight: 800;
+  margin-top: 12px;
+}
+
+.bidi-pill {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.bidi-fact-list {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.bidi-fact-row {
+  display: grid;
+  grid-template-columns: 108px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+}
+
+.bidi-fact-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.bidi-fact-value {
+  text-align: right;
+  font-size: 0.95rem;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.bidi-fact-value--select {
+  user-select: text;
+}
+
+.bidi-detail-block {
+  margin-bottom: 16px;
+}
+
+.bidi-detail-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.bidi-detail-value {
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.bidi-inline-loading {
+  display: flex;
+  justify-content: center;
+}
+
+.bidi-pending-block {
+  margin-bottom: 8px;
+}
+
+.bidi-pending-detail {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.bidi-pending-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.bidi-link-btn {
+  background: none;
+  border: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 4px 0;
+}
+
+.bidi-debug-code {
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Layout composition utilities (stack on phone, split on md+)                */
+/* -------------------------------------------------------------------------- */
+
+.bidi-layout-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.bidi-layout-split {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.bidi-layout-split__primary,
+.bidi-layout-split__aside {
+  min-width: 0;
+}
+
+.bidi-layout-split__aside .bidi-momo-trust {
+  margin-top: 16px;
+}
+
+/* Phone: keep trust footer below form with breathing room */
+.bidi-layout-split > .bidi-layout-split__aside {
+  margin-top: 8px;
+}
+
+.bidi-layout-detail-split {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Responsive framed stage                                                    */
+/* -------------------------------------------------------------------------- */
+
+@media (min-width: 640px) {
+  :root {
+    --stage-max: 520px;
+    --content-gutter: 20px;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --stage-max: 680px;
+    --content-gutter: 24px;
+    --dock-label-size: 12px;
+    --dock-pad-x: 12px;
+  }
+
+  .bidi-page-title {
+    font-size: 1.5rem;
+  }
+
+  .bidi-page-subtitle {
+    font-size: 1rem;
+  }
+
+  .bidi-section-title {
+    font-size: 1.125rem;
+  }
+
+  .bidi-wallet-card__balance {
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+  }
+
+  .bidi-scroll-inner {
+    padding-bottom: 28px;
+  }
+
+  .bidi-tab-bar {
+    padding-top: 10px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  /* Bottom sheet → centered modal */
+  .bidi-sheet-root {
+    align-items: center;
+    padding: 24px 16px;
+  }
+
+  .bidi-sheet-panel {
+    width: min(440px, 92%);
+    max-height: min(88vh, 720px);
+    border-radius: 20px;
+    padding: 8px 24px 24px;
+    animation: bidi-modal-in 0.22s ease-out;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+  }
+
+  .bidi-sheet-handle {
+    display: none;
+  }
+
+  /* Transactional / profile / detail splits inside the stage.
+     DOM order is primary then aside (phone stack). On md+, aside sits left. */
+  .bidi-layout-split {
+    display: grid;
+    grid-template-columns: 1fr 1.15fr;
+    gap: 20px;
+    align-items: start;
+    margin-top: 4px;
+  }
+
+  .bidi-layout-split__aside {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 0;
+  }
+
+  .bidi-layout-split__primary {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .bidi-layout-split .bidi-card,
+  .bidi-layout-split .bidi-momo-trust,
+  .bidi-layout-split .bidi-mt-3 {
+    margin-top: 0;
+  }
+
+  /* Natural DOM order (left→right = first→second child); no column swap */
+  .bidi-layout-split--natural .bidi-layout-split__aside,
+  .bidi-layout-split--natural .bidi-layout-split__primary {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .bidi-layout-split--natural {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .bidi-profile-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+    margin-top: 16px;
+  }
+
+  .bidi-profile-split > .bidi-card {
+    margin-top: 0;
+    height: 100%;
+  }
+
+  .bidi-layout-detail-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  .bidi-layout-detail-split .bidi-qr-block {
+    margin-top: 0;
+  }
+
+  .bidi-layout-detail-split .bidi-detail-body {
+    margin-top: 0;
+  }
+
+  .bidi-qr-inner svg {
+    width: clamp(220px, 28vw, 280px) !important;
+    height: auto !important;
+    max-width: 100%;
+  }
+
+  .bidi-empty-state {
+    max-width: 420px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .bidi-page-head {
+    margin-bottom: 12px;
+  }
+
+  .bidi-list-row {
+    padding: 16px;
+  }
+
+  .bidi-auth-card-wrap {
+    max-width: 440px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --stage-max: 840px;
+    --content-gutter: 28px;
+    --stage-margin-y: 24px;
+    --stage-radius: 20px;
+    --stage-border: 1px solid var(--divider);
+    --stage-shadow: 0 28px 72px rgba(0, 58, 29, 0.32), 0 8px 24px rgba(0, 0, 0, 0.18);
+  }
+
+  .bidi-phone-shell,
+  .bidi-app-stage {
+    min-height: min(calc(100dvh - 48px), 900px);
+    height: min(calc(100dvh - 48px), 900px);
+    max-height: min(calc(100dvh - 48px), 900px);
+  }
+
+  .bidi-scroll-inner {
+    padding: 28px 32px 32px;
+  }
+
+  .bidi-card {
+    padding: 24px;
+  }
+
+  .bidi-layout-split {
+    gap: 24px;
+  }
+
+  .bidi-profile-split {
+    gap: 24px;
+  }
+
+  .bidi-layout-detail-split {
+    gap: 24px;
+  }
+
+  /* Pointer affordances */
+  .bidi-tab-bar__item:hover {
+    color: var(--text-secondary);
+    background: color-mix(in srgb, var(--accent-tint) 45%, transparent);
+  }
+
+  .bidi-tab-bar__item--active:hover {
+    color: var(--brand-accent);
+  }
+
+  .bidi-list-row:hover {
+    filter: brightness(1.04);
+  }
+
+  .bidi-btn--secondary:hover:not(:disabled),
+  .bidi-btn--outline:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+
+  .bidi-btn--primary:hover:not(:disabled) {
+    filter: brightness(1.05);
+  }
+
+  .bidi-chip:hover,
+  .bidi-icon-btn:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  .bidi-back:hover,
+  .bidi-link:hover,
+  .bidi-inline-link:hover,
+  .bidi-link-btn:hover {
+    opacity: 0.85;
+  }
+
+  .bidi-tab-bar__item:focus-visible,
+  .bidi-list-row:focus-visible,
+  .bidi-btn:focus-visible,
+  .bidi-icon-btn:focus-visible,
+  .bidi-chip:focus-visible,
+  .bidi-back:focus-visible {
+    outline: 2px solid var(--brand-accent);
+    outline-offset: 2px;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    --stage-max: 920px;
+    --content-gutter: 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bidi-sheet-panel,
+  .bidi-snackbar,
+  .bidi-spinner,
+  .bidi-skeleton {
+    animation: none !important;
+    transition: none !important;
+  }
+}
