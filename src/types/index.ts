@@ -174,8 +174,12 @@ export interface WalletBalance {
   version?: number;
 }
 
-/** Driver `POST /wallet/funding` MoMo providers (Korba collections). */
-export type FundingProvider = 'MTN_MOMO' | 'VODAFONE_CASH' | 'AIRTELTIGO_MONEY';
+/** Driver `POST /wallet/funding` providers (Paystack MoMo or Pay with Transfer). */
+export type FundingProvider =
+  | 'MTN_MOMO'
+  | 'VODAFONE_CASH'
+  | 'AIRTELTIGO_MONEY'
+  | 'BANK_TRANSFER';
 
 /**
  * Local funding row status from GET/POST /wallet/funding*.
@@ -190,7 +194,21 @@ export type FundingStatus =
   | 'EXPIRED';
 
 /** What the driver must do while a funding request is still PENDING. */
-export type FundingNextAction = 'submit_otp' | 'approve_on_phone' | 'none';
+export type FundingNextAction =
+  | 'submit_otp'
+  | 'approve_on_phone'
+  | 'await_bank_transfer'
+  | 'none';
+
+/** Temporary Paystack pay-to account for bank transfer top-ups. */
+export interface FundingTransferInstructions {
+  accountNumber: string;
+  accountName: string;
+  bankName: string;
+  bankSlug?: string;
+  amount: string;
+  expiresAt: string;
+}
 
 export interface WalletFunding {
   id: string;
@@ -202,6 +220,7 @@ export interface WalletFunding {
   nextAction?: FundingNextAction | string | null;
   /** Server copy for the OTP sheet title or the phone-approval wait. */
   displayText?: string | null;
+  transferInstructions?: FundingTransferInstructions | null;
   createdAt?: string;
   completedAt?: string | null;
 }

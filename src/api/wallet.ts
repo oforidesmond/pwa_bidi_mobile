@@ -14,19 +14,27 @@ export const getWalletBalance = async (): Promise<WalletBalance> => {
 };
 
 /**
- * Initiate MoMo collection. Success = prompt started (status PENDING), not balance credited.
- * `phone` is local `0XXXXXXXXX` — backend forwards to Korba `customer_number`.
+ * Initiate MoMo or bank-transfer collection. Success = prompt/instructions started
+ * (status PENDING), not balance credited.
  * Always send Idempotency-Key; reuse the same key when retrying the same logical top-up.
  */
 export const startWalletFunding = async (
-  data: { amount: number; provider: FundingProvider; phone: string },
+  data: {
+    amount: number;
+    provider: FundingProvider;
+    phone?: string;
+  },
   idempotencyKey = createIdempotencyKey(),
 ): Promise<WalletFunding> => {
-  const response = await api.post(
-    '/wallet/funding',
-    { amount: data.amount, provider: data.provider, phone: data.phone },
-    { headers: { 'Idempotency-Key': idempotencyKey } },
-  );
+  const body: {
+    amount: number;
+    provider: FundingProvider;
+    phone?: string;
+  } = { amount: data.amount, provider: data.provider };
+  if (data.phone) body.phone = data.phone;
+  const response = await api.post('/wallet/funding', body, {
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
   return response.data;
 };
 

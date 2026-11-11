@@ -1,17 +1,26 @@
 import { createIdempotencyKey } from '@/api/idempotency';
 import { buyFuelToken } from '@/api/driver';
 import { formatMoney, getWalletBalance } from '@/api/wallet';
-import { MomoTrustFooter } from '@/components/MomoTrustFooter';
+import { BankTransferDetails } from '@/components/BankTransferDetails';
+import { PaymentTrustFooter } from '@/components/PaymentTrustFooter';
 import { Sheet } from '@/components/Sheet';
 import { CrossPlatformHint } from '@/components/CrossPlatformHint';
 import { WalletCard } from '@/components/WalletCard';
-import { FUNDING_PROVIDERS, fundingProviderLabel, maskPhone } from '@/constants/funding';
+import {
+  BANK_TRANSFER_PROVIDER,
+  FUNDING_PROVIDERS,
+  LAST_FUNDING_METHOD_KEY,
+  fundingProviderLabel,
+  isBankTransferProvider,
+  maskPhone,
+} from '@/constants/funding';
 import { useAuth } from '@/context/AuthContext';
 import { useDialog } from '@/context/DialogContext';
 import { useFeedback } from '@/context/FeedbackContext';
 import { useSetupBanner } from '@/context/SetupBannerContext';
 import { useBidiTheme } from '@/context/ThemeContext';
 import { useWalletFunding } from '@/hooks/useWalletFunding';
+import { storage } from '@/lib/storage';
 import type { FundingProvider } from '@/types';
 import {
   amountGuidanceHint,
@@ -26,6 +35,7 @@ import { formatDisplayMoney, tabularNumsStyle } from '@/utils/currency-display';
 import {
   CONFIRMING_PAYMENT_COPY,
   fundingApproveCopy,
+  fundingBankTransferCopy,
   fundingOtpTitle,
   isFundingOtpCode,
   normalizeFundingNextAction,
@@ -44,11 +54,14 @@ import { emitWalletActivityChanged } from '@/utils/wallet-activity-events';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
+type FundMethod = 'bank' | 'momo';
+
 export default function DriverPage() {
   const [amount, setAmount] = useState('');
   const [fundAmount, setFundAmount] = useState('');
   const [fundPhone, setFundPhone] = useState('');
   const [fundProvider, setFundProvider] = useState<FundingProvider | null>(null);
+  const [fundMethod, setFundMethod] = useState<FundMethod>('bank');
   const [loading, setLoading] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [otpCode, setOtpCode] = useState('');
@@ -73,6 +86,17 @@ export default function DriverPage() {
     const detectedNetwork = detectGhanaMomoNetwork(display);
     lastDetectedProviderRef.current = detectedNetwork?.provider ?? null;
     setFundProvider(detectedNetwork?.provider ?? null);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void storage.getItem(LAST_FUNDING_METHOD_KEY).then((raw) => {
+      if (cancelled) return;
+      if (raw === 'momo' || raw === 'bank') setFundMethod(raw);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const executeBuy = useCallback(
@@ -196,6 +220,16 @@ export default function DriverPage() {
     onFundingSettledSuccess: handleFundingSettledSuccess,
   });
 
+  const selectFundMethod = useCallback(
+    (method: FundMethod) => {
+      void hapticLight();
+      setFundMethod(method);
+      void storage.setItem(LAST_FUNDING_METHOD_KEY, method);
+      resetFundKey();
+    },
+    [resetFundKey],
+  );
+
   const loadBalanceRef = useRef(loadBalance);
   loadBalanceRef.current = loadBalance;
   const pendingFundingRef = useRef(pendingFunding);
@@ -231,7 +265,11 @@ export default function DriverPage() {
     fundAmount !== '' && !Number.isNaN(fundNum) && isAmountInGuidanceRange(fundNum);
   const isValidAmount =
     amount !== '' && !Number.isNaN(buyNum) && isAmountInGuidanceRange(buyNum);
-  const canSubmitFund = isValidFund && phoneValid && !funding && !pendingFunding;
+  const canSubmitFund =
+    isValidFund &&
+    !funding &&
+    !pendingFunding &&
+    (fundMethod === 'bank' || phoneValid);
 
   useEffect(() => {
     const next = detected?.provider ?? null;
@@ -272,11 +310,16 @@ export default function DriverPage() {
       if (pendingFunding) {
         const waitingOnCode =
           normalizeFundingNextAction(pendingFunding.nextAction) === 'submit_otp';
+        const waitingOnBank =
+          normalizeFundingNextAction(pendingFunding.nextAction) === 'await_bank_transfer' ||
+          isBankTransferProvider(pendingFunding.provider);
         showAlert({
           title: 'Top-up in progress',
           message: waitingOnCode
             ? 'Enter the SMS code for your top-up, then try buying again.'
-            : 'A MoMo top-up is already awaiting approval. Approve the prompt on your phone, then try buying again.',
+            : waitingOnBank
+              ? 'A bank transfer top-up is already in progress. Complete the transfer, then try buying again.'
+              : 'A MoMo top-up is already awaiting approval. Approve the prompt on your phone, then try buying again.',
         });
         return;
       }
@@ -289,6 +332,15 @@ export default function DriverPage() {
   };
 
   const handleFund = async () => {
+    if (fundMethod === 'bank') {
+      const ok = await submitFunding(fundNum, BANK_TRANSFER_PROVIDER);
+      if (ok) {
+        setFundAmount('');
+        resetFundKey();
+        setTopUpOpen(false);
+      }
+      return;
+    }
     if (!fundProvider) {
       void hapticError();
       showAlert({
@@ -327,20 +379,30 @@ export default function DriverPage() {
       ? `Pending: ${formatMoney(wallet.pendingBalance, wallet?.currency || 'GHS')}`
       : null;
 
-  const pendingPhoneMasked = pendingFunding
+  const pendingPhoneMasked = pendingFunding?.phone
     ? maskPhone(pendingFunding.phone) ?? pendingFunding.phone
     : null;
   const pendingAction = normalizeFundingNextAction(pendingFunding?.nextAction);
+  const pendingIsBank =
+    !!pendingFunding &&
+    (pendingAction === 'await_bank_transfer' ||
+      isBankTransferProvider(pendingFunding.provider));
   const otpReady = isFundingOtpCode(otpCode);
   const pendingDetail = !pendingFunding
     ? ''
     : pendingAction === 'submit_otp'
       ? `Enter the SMS code sent to your phone to continue this top-up of ${formatDisplayMoney(pendingFunding.amount)}. This is not your MoMo PIN.`
-      : pendingExpired
-        ? `Top-up of ${formatDisplayMoney(pendingFunding.amount)} via ${fundingProviderLabel(pendingFunding.provider)} to ${pendingPhoneMasked} is taking longer than usual. Check MoMo SMS, or try again later. Ref ${truncateFundingId(pendingFunding.fundingId)}`
-        : pendingAction === 'none'
-          ? `${CONFIRMING_PAYMENT_COPY} Top-up of ${formatDisplayMoney(pendingFunding.amount)} via ${fundingProviderLabel(pendingFunding.provider)}.`
-          : `Top-up of ${formatDisplayMoney(pendingFunding.amount)} via ${fundingProviderLabel(pendingFunding.provider)} to ${pendingPhoneMasked}. ${fundingApproveCopy(pendingFunding.displayText)} Your balance updates when payment succeeds.`;
+      : pendingIsBank
+        ? pendingExpired
+          ? `Bank transfer of ${formatDisplayMoney(pendingFunding.amount)} is taking longer than usual. Confirm the transfer in your bank app, or try again later. Ref ${truncateFundingId(pendingFunding.fundingId)}`
+          : pendingAction === 'none'
+            ? `${CONFIRMING_PAYMENT_COPY} Bank transfer of ${formatDisplayMoney(pendingFunding.amount)}.`
+            : `${fundingBankTransferCopy(pendingFunding.displayText)} Your balance updates when payment succeeds.`
+        : pendingExpired
+          ? `Top-up of ${formatDisplayMoney(pendingFunding.amount)} via ${fundingProviderLabel(pendingFunding.provider)} to ${pendingPhoneMasked} is taking longer than usual. Check MoMo SMS, or try again later. Ref ${truncateFundingId(pendingFunding.fundingId)}`
+          : pendingAction === 'none'
+            ? `${CONFIRMING_PAYMENT_COPY} Top-up of ${formatDisplayMoney(pendingFunding.amount)} via ${fundingProviderLabel(pendingFunding.provider)}.`
+            : `Top-up of ${formatDisplayMoney(pendingFunding.amount)} via ${fundingProviderLabel(pendingFunding.provider)} to ${pendingPhoneMasked}. ${fundingApproveCopy(pendingFunding.displayText)} Your balance updates when payment succeeds.`;
   const pendingChipLabel =
     pendingAction === 'submit_otp'
       ? 'SMS code needed'
@@ -348,7 +410,9 @@ export default function DriverPage() {
         ? 'Still waiting for payment'
         : pendingAction === 'none'
           ? 'Confirming payment'
-          : 'Awaiting MoMo approval';
+          : pendingIsBank
+            ? 'Awaiting bank transfer'
+            : 'Awaiting MoMo approval';
 
   return (
     <div className="bidi-scroll-page" style={{ backgroundColor: tokens.surfaceBg }}>
@@ -409,6 +473,12 @@ export default function DriverPage() {
                     <p className="bidi-pending-detail" style={{ color: tokens.onGradientMuted }}>
                       {pendingDetail}
                     </p>
+                    {pendingIsBank && pendingFunding.transferInstructions ? (
+                      <BankTransferDetails
+                        instructions={pendingFunding.transferInstructions}
+                        onGradient
+                      />
+                    ) : null}
                     <div className="bidi-pending-actions">
                       {pendingAction === 'submit_otp' ? (
                         <button
@@ -491,7 +561,7 @@ export default function DriverPage() {
             </section>
           </div>
           <div className="bidi-layout-split__aside">
-            <MomoTrustFooter />
+            <PaymentTrustFooter />
           </div>
         </div>
       </div>
@@ -502,35 +572,22 @@ export default function DriverPage() {
             Top up wallet
           </h2>
           <p className="bidi-sheet-message" style={{ color: tokens.textSecondary }}>
-            Enter the MoMo number that should receive the payment prompt. Your balance updates when
-            payment succeeds.
+            {fundMethod === 'bank'
+              ? 'Pay from your bank app. We will show a temporary account to transfer to. Your balance updates when payment succeeds.'
+              : 'Enter the MoMo number that should receive the payment prompt. Your balance updates when payment succeeds.'}
           </p>
-          <label className="bidi-field">
-            <span className="bidi-field__label">MoMo number</span>
-            <input
-              className="bidi-input"
-              inputMode="tel"
-              autoComplete="tel"
-              value={fundPhone}
-              onChange={(e) => {
-                setFundPhone(e.target.value);
-                resetFundKey();
-              }}
-              aria-invalid={phoneFieldError}
-              aria-label="MoMo phone number"
-            />
-          </label>
           <div className="bidi-field">
-            <span className="bidi-field__label" id="momo-network-label">
-              Network
+            <span className="bidi-field__label" id="fund-method-label">
+              Payment method
             </span>
-            <div
-              className="bidi-segmented"
-              role="group"
-              aria-labelledby="momo-network-label"
-            >
-              {FUNDING_PROVIDERS.map((option) => {
-                const active = fundProvider === option.value;
+            <div className="bidi-segmented" role="group" aria-labelledby="fund-method-label">
+              {(
+                [
+                  { value: 'bank' as const, label: 'Bank transfer' },
+                  { value: 'momo' as const, label: 'Mobile Money' },
+                ] as const
+              ).map((option) => {
+                const active = fundMethod === option.value;
                 return (
                   <button
                     key={option.value}
@@ -541,24 +598,77 @@ export default function DriverPage() {
                       color: active ? tokens.brand.accent600 : tokens.textSecondary,
                     }}
                     aria-pressed={active}
-                    onClick={() => {
-                      void hapticLight();
-                      setFundProvider(option.value);
-                      resetFundKey();
-                    }}
+                    onClick={() => selectFundMethod(option.value)}
                   >
-                    {option.shortLabel}
+                    {option.label}
                   </button>
                 );
               })}
             </div>
           </div>
-          <p
-            className={phoneFieldError ? 'bidi-field__error' : 'bidi-hint'}
-            style={{ color: phoneFieldError ? undefined : tokens.textSecondary }}
-          >
-            {phoneHint}
-          </p>
+          {fundMethod === 'momo' ? (
+            <>
+              <label className="bidi-field bidi-mt-3">
+                <span className="bidi-field__label">MoMo number</span>
+                <input
+                  className="bidi-input"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={fundPhone}
+                  onChange={(e) => {
+                    setFundPhone(e.target.value);
+                    resetFundKey();
+                  }}
+                  aria-invalid={phoneFieldError}
+                  aria-label="MoMo phone number"
+                />
+              </label>
+              <div className="bidi-field">
+                <span className="bidi-field__label" id="momo-network-label">
+                  Network
+                </span>
+                <div
+                  className="bidi-segmented"
+                  role="group"
+                  aria-labelledby="momo-network-label"
+                >
+                  {FUNDING_PROVIDERS.map((option) => {
+                    const active = fundProvider === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`bidi-segmented__btn${active ? ' bidi-segmented__btn--active' : ''}`}
+                        style={{
+                          backgroundColor: active ? tokens.accentTint : 'transparent',
+                          color: active ? tokens.brand.accent600 : tokens.textSecondary,
+                        }}
+                        aria-pressed={active}
+                        onClick={() => {
+                          void hapticLight();
+                          setFundProvider(option.value);
+                          resetFundKey();
+                        }}
+                      >
+                        {option.shortLabel}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <p
+                className={phoneFieldError ? 'bidi-field__error' : 'bidi-hint'}
+                style={{ color: phoneFieldError ? undefined : tokens.textSecondary }}
+              >
+                {phoneHint}
+              </p>
+            </>
+          ) : (
+            <p className="bidi-hint bidi-mt-3" style={{ color: tokens.textSecondary }}>
+              After you continue, copy the bank details and transfer the exact amount with Instant
+              Pay / GIP.
+            </p>
+          )}
           <label className="bidi-field bidi-mt-3">
             <span className="bidi-field__label">Amount (E.g., 100)</span>
             <div className="bidi-field__row">
@@ -588,12 +698,16 @@ export default function DriverPage() {
             onClick={() => void handleFund()}
             disabled={!canSubmitFund}
           >
-            {funding ? 'Submitting…' : 'Fund Wallet'}
+            {funding
+              ? 'Submitting…'
+              : fundMethod === 'bank'
+                ? 'Get transfer details'
+                : 'Fund Wallet'}
           </button>
           <button type="button" className="bidi-btn-text bidi-mt-2" onClick={abandonTopUp}>
             Cancel
           </button>
-          <MomoTrustFooter compact />
+          <PaymentTrustFooter compact />
         </div>
       </Sheet>
 

@@ -39,6 +39,7 @@ function asMetadata(raw: LedgerEntry['metadata']): LedgerEntryMetadata | null {
 function providerShortLabel(provider: string | undefined): string | null {
   if (!provider) return null;
   const p = provider.toUpperCase();
+  if (p === 'BANK_TRANSFER' || p === 'BANK') return 'Bank';
   if (p === 'MTN_MOMO' || p === 'MTN') return 'MTN';
   if (p === 'VODAFONE_CASH' || p === 'VOD' || p === 'TELECEL') return 'Telecel';
   if (p === 'AIRTELTIGO_MONEY' || p === 'AIR' || p === 'AT') return 'AT';
@@ -98,13 +99,18 @@ export function ledgerDetailRows(entry: LedgerEntry): LedgerDetailRow[] {
     { label: 'Balance after', value: `${currency} ${entry.balanceAfter}` },
   ];
 
-  const network = providerShortLabel(
-    typeof meta?.provider === 'string' ? meta.provider : undefined,
-  );
-  if (network) rows.push({ label: 'Network', value: network });
+  const providerRaw =
+    typeof meta?.provider === 'string' ? meta.provider : undefined;
+  const isBankTopUp =
+    String(providerRaw ?? '').toUpperCase() === 'BANK_TRANSFER' ||
+    String(providerRaw ?? '').toUpperCase() === 'BANK';
+  const network = providerShortLabel(providerRaw);
+  if (network) {
+    rows.push({ label: isBankTopUp ? 'Method' : 'Network', value: network });
+  }
 
   const phone = nonEmpty(meta?.phoneMasked);
-  if (phone) rows.push({ label: 'Phone', value: phone });
+  if (phone && !isBankTopUp) rows.push({ label: 'Phone', value: phone });
 
   const token = nonEmpty(meta?.tokenCodeMasked);
   if (token) rows.push({ label: 'Token', value: token, selectable: true });
@@ -139,17 +145,20 @@ export function ledgerSubtitle(entry: Pick<LedgerEntry, 'reason' | 'createdAt' |
   const when = formatLedgerShortTime(entry.createdAt);
 
   if (reason === 'TOPUP' && meta) {
-    const network = providerShortLabel(
-      typeof meta.provider === 'string' ? meta.provider : undefined,
-    );
+    const provider =
+      typeof meta.provider === 'string' ? meta.provider : undefined;
+    const network = providerShortLabel(provider);
     const phone =
       typeof meta.phoneMasked === 'string' && meta.phoneMasked.trim()
         ? meta.phoneMasked.trim()
         : null;
-    const parts = ['MoMo top-up'];
-    if (network) parts.push(network);
-    if (phone) parts.push(phone);
-    if (parts.length > 1) return parts.join(' · ');
+    const isBank =
+      String(provider ?? '').toUpperCase() === 'BANK_TRANSFER' ||
+      String(provider ?? '').toUpperCase() === 'BANK';
+    const parts = [isBank ? 'Bank transfer top-up' : 'MoMo top-up'];
+    if (network && !isBank) parts.push(network);
+    if (phone && !isBank) parts.push(phone);
+    if (parts.length > 1 || isBank) return parts.join(' · ');
   }
 
   if (reason === 'TOKEN_PURCHASE' && meta) {

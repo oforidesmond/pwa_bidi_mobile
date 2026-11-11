@@ -1,28 +1,39 @@
-import type { FundingNextAction, FundingProvider, FundingStatus, WalletFunding } from '@/types';
+import type {
+  FundingNextAction,
+  FundingProvider,
+  FundingStatus,
+  FundingTransferInstructions,
+  WalletFunding,
+} from '@/types';
 import {
   FUNDING_POLL_FAST_MS,
   FUNDING_POLL_FAST_WINDOW_MS,
   FUNDING_POLL_SLOW_MS,
   PENDING_FUNDING_POLL_MAX_MS,
   PENDING_FUNDING_TTL_MS,
+  isBankTransferProvider,
 } from '@/constants/funding';
 
 export type PendingFunding = {
   fundingId: string;
   amount: number;
   provider: FundingProvider;
-  /** Local `0XXXXXXXXX` that received the MoMo prompt. */
+  /** Local `0XXXXXXXXX` that received the MoMo prompt. Empty for bank transfer. */
   phone: string;
   baselineAvailable: number;
   submittedAt: number;
   nextAction?: FundingNextAction | string | null;
   displayText?: string | null;
+  transferInstructions?: FundingTransferInstructions | null;
 };
 
 export const OTP_SHEET_FALLBACK_TITLE = 'Please enter the OTP sent to your phone';
 
 export const APPROVE_ON_PHONE_COPY =
   'Approve the prompt on your phone and enter your MoMo PIN.';
+
+export const BANK_TRANSFER_COPY =
+  'Transfer the exact amount to the account shown. Use Instant Pay or GIP.';
 
 export const CONFIRMING_PAYMENT_COPY = 'Confirming payment…';
 
@@ -78,12 +89,15 @@ export function isTerminalFundingFailure(
 export function fundingTerminalFailureCopy(
   status: FundingStatus | string | null | undefined,
   failureReason?: string | null,
+  provider?: FundingProvider | string | null,
 ): string {
   if (failureReason && failureReason.trim()) return failureReason.trim();
   const s = normalizeFundingStatus(status);
   if (s === 'CANCELLED' || s === 'CANCELED') return 'Payment was cancelled.';
   if (s === 'EXPIRED' || s === 'TIMEOUT') {
-    return 'The Mobile Money prompt expired before approval.';
+    return isBankTransferProvider(provider)
+      ? 'The bank transfer account expired before payment was received.'
+      : 'The Mobile Money prompt expired before approval.';
   }
   if (s === 'ABANDONED') return 'Payment was abandoned before it was completed.';
   if (s === 'REVERSED') return 'Payment was reversed.';
@@ -118,11 +132,29 @@ export function truncateFundingId(id: string, keep = 8): string {
   return `${id.slice(0, keep)}…`;
 }
 
+function isTransferInstructions(value: unknown): value is FundingTransferInstructions {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.accountNumber === 'string' &&
+    typeof v.accountName === 'string' &&
+    typeof v.bankName === 'string' &&
+    typeof v.amount === 'string' &&
+    typeof v.expiresAt === 'string'
+  );
+}
+
 export function isValidPendingFunding(value: unknown): value is PendingFunding {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
   if (v.nextAction != null && typeof v.nextAction !== 'string') return false;
   if (v.displayText != null && typeof v.displayText !== 'string') return false;
+  if (
+    v.transferInstructions != null &&
+    !isTransferInstructions(v.transferInstructions)
+  ) {
+    return false;
+  }
   return (
     typeof v.fundingId === 'string' &&
     v.fundingId.length > 0 &&
@@ -141,6 +173,7 @@ export function normalizeFundingNextAction(
   const s = String(value ?? '').toLowerCase();
   if (s === 'submit_otp') return 'submit_otp';
   if (s === 'approve_on_phone') return 'approve_on_phone';
+  if (s === 'await_bank_transfer') return 'await_bank_transfer';
   return 'none';
 }
 
@@ -160,6 +193,45 @@ export function fundingApproveCopy(displayText?: string | null): string {
   if (!extra) return APPROVE_ON_PHONE_COPY;
   if (extra.toLowerCase() === APPROVE_ON_PHONE_COPY.toLowerCase()) return APPROVE_ON_PHONE_COPY;
   return `${APPROVE_ON_PHONE_COPY}\n${extra}`;
+}
+
+export function fundingBankTransferCopy(displayText?: string | null): string {
+  const extra = displayText?.trim();
+  if (!extra) return BANK_TRANSFER_COPY;
+  if (extra.toLowerCase() === BANK_TRANSFER_COPY.toLowerCase()) return BANK_TRANSFER_COPY;
+  return `${BANK_TRANSFER_COPY}\n${extra}`;
+}
+
+export function formatTransferShareText(
+  instructions: FundingTransferInstructions,
+): string {
+  return [
+    `Send exactly GHS ${instructions.amount}`,
+    `Bank: ${instructions.bankName}`,
+    `Account name: ${instructions.accountName}`,
+    `Account number: ${instructions.accountNumber}`,
+    `Use Instant Pay / GIP (not ACH or RTGS).`,
+  ].join('\n');
+}
+
+export function transferExpiresInMs(
+  expiresAt: string | null | undefined,
+  now = Date.now(),
+): number | null {
+  if (!expiresAt) return null;
+  const ms = Date.parse(expiresAt);
+  if (!Number.isFinite(ms)) return null;
+  return ms - now;
+}
+
+export function formatTransferCountdown(ms: number | null): string {
+  if (ms == null) return '';
+  if (ms <= 0) return 'Expired';
+  const totalSec = Math.ceil(ms / 1000);
+  const mins = Math.floor(totalSec / 60);
+  const secs = totalSec % 60;
+  if (mins <= 0) return `${secs}s left`;
+  return `${mins}m ${secs.toString().padStart(2, '0')}s left`;
 }
 
 /** Pull a funding row out of a 200 body or a 400 body that echoes the current request. */
@@ -185,6 +257,11 @@ export function walletFundingFromPayload(data: unknown): WalletFunding | null {
       typeof v.nextAction === 'string' ? v.nextAction : v.nextAction === null ? null : undefined,
     displayText:
       typeof v.displayText === 'string' ? v.displayText : v.displayText === null ? null : undefined,
+    transferInstructions: isTransferInstructions(v.transferInstructions)
+      ? v.transferInstructions
+      : v.transferInstructions === null
+        ? null
+        : undefined,
     createdAt: typeof v.createdAt === 'string' ? v.createdAt : undefined,
     completedAt:
       typeof v.completedAt === 'string' ? v.completedAt : v.completedAt === null ? null : undefined,

@@ -9,7 +9,7 @@ import {
   signalCategoryFromReason,
 } from '@/components/CategoryIconChip';
 import { EmptyState } from '@/components/EmptyState';
-import { MomoTrustFooter } from '@/components/MomoTrustFooter';
+import { PaymentTrustFooter } from '@/components/PaymentTrustFooter';
 import { Sheet } from '@/components/Sheet';
 import { CrossPlatformHint } from '@/components/CrossPlatformHint';
 import { useAuth } from '@/context/AuthContext';
@@ -347,7 +347,7 @@ export default function LedgerPage() {
           </>
         )}
 
-        <MomoTrustFooter />
+        <PaymentTrustFooter />
       </div>
 
       <Sheet open={!!selectedEntry} onClose={dismissSheet} ariaLabel="Activity details">

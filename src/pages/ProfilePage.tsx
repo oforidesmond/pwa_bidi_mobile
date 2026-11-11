@@ -1,6 +1,6 @@
 import { logout as logoutAPI } from '@/api/auth';
 import { AuthLegalFooter } from '@/components/AuthLegalFooter';
-import { MomoTrustFooter } from '@/components/MomoTrustFooter';
+import { PaymentTrustFooter } from '@/components/PaymentTrustFooter';
 import { CrossPlatformHint } from '@/components/CrossPlatformHint';
 import { useAuth, type RoleName } from '@/context/AuthContext';
 import { useDialog } from '@/context/DialogContext';
@@ -190,7 +190,7 @@ export default function ProfilePage() {
           Logout
         </button>
 
-        {isDriver ? <MomoTrustFooter /> : <AuthLegalFooter />}
+        {isDriver ? <PaymentTrustFooter /> : <AuthLegalFooter />}
       </div>
     </div>
   );

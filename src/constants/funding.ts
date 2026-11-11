@@ -13,6 +13,11 @@ export const FUNDING_PROVIDERS: FundingProviderOption[] = [
   { value: 'AIRTELTIGO_MONEY', label: 'AT Money', shortLabel: 'AT' },
 ];
 
+export const BANK_TRANSFER_PROVIDER: FundingProvider = 'BANK_TRANSFER';
+
+/** Storage key for last top-up method preference. */
+export const LAST_FUNDING_METHOD_KEY = 'driver_last_funding_method';
+
 /** Storage key prefix; append `:${userId}`. */
 export const PENDING_FUNDING_STORAGE_PREFIX = 'pending_wallet_funding';
 
@@ -31,8 +36,25 @@ export const FUNDING_POLL_FAST_WINDOW_MS = 180_000;
 export const FUNDING_POLL_SLOW_MS = 12_000;
 
 export function fundingProviderLabel(provider: FundingProvider | string | undefined): string {
+  if (provider === 'BANK_TRANSFER') return 'Bank transfer';
   const match = FUNDING_PROVIDERS.find((p) => p.value === provider);
   return match?.label ?? provider ?? 'Mobile Money';
+}
+
+export function isBankTransferProvider(
+  provider: FundingProvider | string | null | undefined,
+): boolean {
+  return provider === 'BANK_TRANSFER';
+}
+
+export function isMomoFundingProvider(
+  provider: FundingProvider | string | null | undefined,
+): provider is Exclude<FundingProvider, 'BANK_TRANSFER'> {
+  return (
+    provider === 'MTN_MOMO' ||
+    provider === 'VODAFONE_CASH' ||
+    provider === 'AIRTELTIGO_MONEY'
+  );
 }
 
 export function pendingFundingStorageKey(userId: string): string {

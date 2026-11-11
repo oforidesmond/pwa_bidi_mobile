@@ -189,6 +189,35 @@ describe('funding create stays pending', () => {
     expect(mockPost.mock.calls.some((c) => String(c[0]).includes('/complete'))).toBe(false);
   });
 
+  it('startWalletFunding bank transfer omits phone and returns transferInstructions', async () => {
+    mockPost.mockResolvedValue({
+      data: {
+        id: 'fund-bank',
+        amount: '50.00',
+        status: 'PENDING',
+        provider: 'BANK_TRANSFER',
+        nextAction: 'await_bank_transfer',
+        transferInstructions: {
+          accountNumber: '1260257501',
+          accountName: 'TEST-MANAGED-ACCOUNT',
+          bankName: 'Test Bank',
+          amount: '50.00',
+          expiresAt: '2026-11-11T18:00:00.000Z',
+        },
+      },
+    });
+    const key = 'fund-bank-key';
+    const res = await startWalletFunding({ amount: 50, provider: 'BANK_TRANSFER' }, key);
+    expect(res.status).toBe('PENDING');
+    expect(res.nextAction).toBe('await_bank_transfer');
+    expect(res.transferInstructions?.accountNumber).toBe('1260257501');
+    expect(mockPost).toHaveBeenCalledWith(
+      '/wallet/funding',
+      { amount: 50, provider: 'BANK_TRANSFER' },
+      { headers: { 'Idempotency-Key': key } },
+    );
+  });
+
   it('reuses the same Idempotency-Key on funding retry', async () => {
     mockPost.mockResolvedValue({
       data: { id: 'fund-1', amount: '50.00', status: 'PENDING', provider: 'VODAFONE_CASH' },

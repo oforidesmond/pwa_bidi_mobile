@@ -5,14 +5,24 @@ import {
   startWalletFunding,
   submitWalletFundingOtp,
 } from '@/api/wallet';
-import { PENDING_FUNDING_TTL_MS, pendingFundingStorageKey } from '@/constants/funding';
+import {
+  PENDING_FUNDING_TTL_MS,
+  isBankTransferProvider,
+  pendingFundingStorageKey,
+} from '@/constants/funding';
 import { storage } from '@/lib/storage';
-import type { FundingProvider, WalletBalance, WalletFunding } from '@/types';
+import type {
+  FundingProvider,
+  FundingTransferInstructions,
+  WalletBalance,
+  WalletFunding,
+} from '@/types';
 import { amountGuidanceHint, isAmountInGuidanceRange } from '@/utils/amounts';
 import { formatAxiosError } from '@/utils/apiMessage';
 import {
   CONFIRMING_PAYMENT_COPY,
   fundingApproveCopy,
+  fundingBankTransferCopy,
   fundingPollIntervalMs,
   fundingTerminalFailureCopy,
   isFundingOtpCode,
@@ -83,6 +93,7 @@ function pendingFromCreate(
     submittedAt: Date.now(),
     nextAction: normalizeFundingNextAction(row.nextAction),
     displayText: row.displayText ?? null,
+    transferInstructions: row.transferInstructions ?? null,
   };
 }
 
@@ -158,12 +169,13 @@ export function useWalletFunding({
 
   const onSettledFailure = useCallback(
     async (status: string | undefined, failureReason?: string | null) => {
+      const provider = pendingRef.current?.provider;
       await clearPending();
       fundKeyRef.current = null;
       await hapticError();
       showAlert({
         title: 'Top-up not completed',
-        message: fundingTerminalFailureCopy(status, failureReason),
+        message: fundingTerminalFailureCopy(status, failureReason, provider),
       });
     },
     [clearPending, showAlert],
@@ -230,13 +242,24 @@ export function useWalletFunding({
       const previous = normalizeFundingNextAction(pendingRef.current?.nextAction);
       const nextAction = normalizeFundingNextAction(row.nextAction);
       const displayText = row.displayText ?? null;
+      const transferInstructions: FundingTransferInstructions | null =
+        row.transferInstructions ?? pendingRef.current?.transferInstructions ?? null;
       const current = pendingRef.current;
+      const instructionsChanged =
+        JSON.stringify(current?.transferInstructions ?? null) !==
+        JSON.stringify(transferInstructions);
       const changed =
         !current ||
         previous !== nextAction ||
-        (current.displayText ?? null) !== displayText;
+        (current.displayText ?? null) !== displayText ||
+        instructionsChanged;
       if (changed && current) {
-        const updated: PendingFunding = { ...current, nextAction, displayText };
+        const updated: PendingFunding = {
+          ...current,
+          nextAction,
+          displayText,
+          transferInstructions,
+        };
         pendingRef.current = updated;
         setPendingFunding(updated);
         await persistPending(updated);
@@ -407,9 +430,10 @@ export function useWalletFunding({
   }, []);
 
   const submitFunding = useCallback(
-    async (amount: number, provider: FundingProvider, phoneInput: string) => {
-      const phone = toKorbaCustomerNumber(phoneInput);
-      if (!isValidGhanaLocalMsisdn(phone)) {
+    async (amount: number, provider: FundingProvider, phoneInput?: string) => {
+      const bank = isBankTransferProvider(provider);
+      const phone = bank ? '' : toKorbaCustomerNumber(phoneInput ?? '');
+      if (!bank && !isValidGhanaLocalMsisdn(phone)) {
         void hapticError();
         showAlert({
           title: 'Invalid number',
@@ -426,7 +450,7 @@ export function useWalletFunding({
         showAlert({
           title: 'Top-up in progress',
           message:
-            'A MoMo top-up is already in progress. Finish it on this screen, or refresh your balance.',
+            'A top-up is already in progress. Finish it on this screen, or refresh your balance.',
         });
         return false;
       }
@@ -440,7 +464,7 @@ export function useWalletFunding({
       try {
         const before = wallet ? parseBalance(wallet.availableBalance) : 0;
         const fundingRes = await startWalletFunding(
-          { amount, provider, phone },
+          bank ? { amount, provider } : { amount, provider, phone },
           fundKeyRef.current,
         );
         const fundingId = fundingRes?.id;
@@ -469,6 +493,10 @@ export function useWalletFunding({
         } else if (action === 'approve_on_phone') {
           showMessage(
             `${fundingApproveCopy(fundingRes.displayText)} Your balance updates when payment succeeds.`,
+          );
+        } else if (action === 'await_bank_transfer') {
+          showMessage(
+            `${fundingBankTransferCopy(fundingRes.displayText)} Your balance updates when payment succeeds.`,
           );
         } else {
           showMessage(CONFIRMING_PAYMENT_COPY);
