@@ -8,7 +8,7 @@ type Props = {
   mutedColor?: string;
 };
 
-const LOGOS: Record<FundingProvider, string> = {
+const LOGOS: Partial<Record<FundingProvider, string>> = {
   MTN_MOMO: '/momo/mtn_logo.png',
   VODAFONE_CASH: '/momo/telecel_logo.png',
   AIRTELTIGO_MONEY: '/momo/at_logo.png',
@@ -33,11 +33,31 @@ export function MomoProviderBadge({
   }
 
   const full = label ?? fundingProviderLabel(provider);
+  const logo = LOGOS[provider];
+
+  if (!logo) {
+    return (
+      <div className="bidi-momo-badge" style={{ height: size }} aria-label={full}>
+        <span
+          className="material-symbols-outlined"
+          style={{ fontSize: size, color: mutedColor }}
+          aria-hidden
+        >
+          account_balance
+        </span>
+        {label ? (
+          <span className="bidi-momo-badge__label" style={{ marginLeft: 6 }}>
+            {label}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="bidi-momo-badge" style={{ height: size }} aria-label={full}>
       <img
-        src={LOGOS[provider]}
+        src={logo}
         alt=""
         width={size}
         height={size}
