@@ -5,7 +5,7 @@ import {
   startWalletFunding,
   submitWalletFundingOtp,
 } from '@/api/wallet';
-import { pendingFundingStorageKey } from '@/constants/funding';
+import { PENDING_FUNDING_TTL_MS, pendingFundingStorageKey } from '@/constants/funding';
 import { storage } from '@/lib/storage';
 import type { FundingProvider, WalletBalance, WalletFunding } from '@/types';
 import { amountGuidanceHint, isAmountInGuidanceRange } from '@/utils/amounts';
@@ -19,6 +19,7 @@ import {
   isFundingSettled,
   isFundingSuccessful,
   isPendingFundingExpired,
+  isPendingFundingPollExhausted,
   isTerminalFundingFailure,
   isValidPendingFunding,
   normalizeFundingNextAction,
@@ -357,20 +358,41 @@ export function useWalletFunding({
     };
   }, [userId, loadBalance, checkFundingStatus]);
 
-  // Adaptive poll of funding status while pending (stops after TTL for stuck PENDING).
+  // Show "I'll check later" / still-waiting copy after the short dismiss TTL.
+  useEffect(() => {
+    if (!pendingFunding) {
+      setPendingExpired(false);
+      return;
+    }
+    if (isPendingFundingExpired(pendingFunding.submittedAt)) {
+      setPendingExpired(true);
+      return;
+    }
+    const remaining = pendingFunding.submittedAt + PENDING_FUNDING_TTL_MS - Date.now();
+    const timer = setTimeout(() => {
+      setPendingExpired(true);
+    }, Math.max(0, remaining));
+    return () => clearTimeout(timer);
+  }, [pendingFunding]);
+
+  // Adaptive poll while pending — continues after dismiss is available so fail/abandoned can still surface.
   useEffect(() => {
     clearPoll();
-    if (!pendingFunding || pendingExpired) return;
+    if (!pendingFunding) return;
 
     const schedule = () => {
-      const interval = fundingPollIntervalMs(pendingFunding.submittedAt);
+      const submittedAt = pendingFunding.submittedAt;
+      const interval = fundingPollIntervalMs(submittedAt);
       pollRef.current = setTimeout(() => {
         void checkFundingStatus().then((cleared) => {
           if (cleared) return;
-          if (pendingRef.current && !isPendingFundingExpired(pendingRef.current.submittedAt)) {
-            schedule();
-          } else if (pendingRef.current) {
+          const current = pendingRef.current;
+          if (!current) return;
+          if (isPendingFundingExpired(current.submittedAt)) {
             setPendingExpired(true);
+          }
+          if (!isPendingFundingPollExhausted(current.submittedAt)) {
+            schedule();
           }
         });
       }, interval);
@@ -378,7 +400,7 @@ export function useWalletFunding({
 
     schedule();
     return clearPoll;
-  }, [pendingFunding, pendingExpired, checkFundingStatus, clearPoll]);
+  }, [pendingFunding, checkFundingStatus, clearPoll]);
 
   const resetFundKey = useCallback(() => {
     fundKeyRef.current = null;
@@ -584,10 +606,16 @@ export function useWalletFunding({
       if (pendingRef.current) {
         const cleared = await checkFundingStatus();
         if (cleared) return;
+        const data = await loadBalance();
+        if (pendingRef.current && data) {
+          showMessage('Checked — this top-up is still pending.');
+        }
+        return;
       }
-      await loadBalance();
+      const data = await loadBalance();
+      if (data) showMessage('Balance updated.');
     })();
-  }, [checkFundingStatus, loadBalance]);
+  }, [checkFundingStatus, loadBalance, showMessage]);
 
   return {
     wallet,

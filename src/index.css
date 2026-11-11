@@ -317,6 +317,60 @@ a {
 
 .bidi-wallet-card__footer {
   margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* Soft actions on the green wallet card — clear affordance, not loud */
+.bidi-wallet-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  background: transparent;
+  color: inherit;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.bidi-wallet-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.bidi-wallet-btn--primary {
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--brand-accent-700);
+  box-shadow: 0 1px 2px rgba(0, 40, 20, 0.12);
+}
+
+.bidi-wallet-btn--secondary {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.bidi-wallet-btn--ghost {
+  min-height: 32px;
+  padding: 6px 12px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  border-color: rgba(255, 255, 255, 0.28);
+  font-weight: 500;
 }
 
 /* Token artifact */
@@ -1317,8 +1371,9 @@ a {
 .bidi-pending-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .bidi-link-btn {
@@ -1593,6 +1648,20 @@ a {
     filter: brightness(1.08);
   }
 
+  .bidi-wallet-btn--primary:hover:not(:disabled) {
+    background: #fff;
+    box-shadow: 0 2px 6px rgba(0, 40, 20, 0.16);
+  }
+
+  .bidi-wallet-btn--secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.55);
+  }
+
+  .bidi-wallet-btn--ghost:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
   .bidi-back:hover,
   .bidi-link:hover,
   .bidi-inline-link:hover,
@@ -1605,6 +1674,7 @@ a {
   .bidi-btn:focus-visible,
   .bidi-icon-btn:focus-visible,
   .bidi-chip:focus-visible,
+  .bidi-wallet-btn:focus-visible,
   .bidi-back:focus-visible {
     outline: 2px solid var(--brand-accent);
     outline-offset: 2px;

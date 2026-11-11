@@ -1,18 +1,18 @@
 import { createIdempotencyKey } from '@/api/idempotency';
 import { buyFuelToken } from '@/api/driver';
 import { formatMoney, getWalletBalance } from '@/api/wallet';
-import { MomoProviderBadge } from '@/components/MomoProviderBadge';
 import { MomoTrustFooter } from '@/components/MomoTrustFooter';
 import { Sheet } from '@/components/Sheet';
-import { UssdSetupBanner } from '@/components/UssdSetupBanner';
+import { CrossPlatformHint } from '@/components/CrossPlatformHint';
 import { WalletCard } from '@/components/WalletCard';
-import { fundingProviderLabel, maskPhone } from '@/constants/funding';
+import { FUNDING_PROVIDERS, fundingProviderLabel, maskPhone } from '@/constants/funding';
 import { useAuth } from '@/context/AuthContext';
 import { useDialog } from '@/context/DialogContext';
 import { useFeedback } from '@/context/FeedbackContext';
 import { useSetupBanner } from '@/context/SetupBannerContext';
 import { useBidiTheme } from '@/context/ThemeContext';
 import { useWalletFunding } from '@/hooks/useWalletFunding';
+import type { FundingProvider } from '@/types';
 import {
   amountGuidanceHint,
   formatAmountInput,
@@ -39,7 +39,7 @@ import {
   normalizeGhanaLocalPhone,
   toDisplayLocalPhone,
 } from '@/utils/ghana-momo';
-import { hapticError, hapticMedium, hapticSuccess } from '@/utils/haptics';
+import { hapticError, hapticLight, hapticMedium, hapticSuccess } from '@/utils/haptics';
 import { emitWalletActivityChanged } from '@/utils/wallet-activity-events';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -48,6 +48,7 @@ export default function DriverPage() {
   const [amount, setAmount] = useState('');
   const [fundAmount, setFundAmount] = useState('');
   const [fundPhone, setFundPhone] = useState('');
+  const [fundProvider, setFundProvider] = useState<FundingProvider | null>(null);
   const [loading, setLoading] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [otpCode, setOtpCode] = useState('');
@@ -55,6 +56,7 @@ export default function DriverPage() {
   const otpSheetWasOpen = useRef(false);
   const buyKeyRef = useRef<string | null>(null);
   const resumeBuyAfterFundRef = useRef(false);
+  const lastDetectedProviderRef = useRef<FundingProvider | null>(null);
   const amountRef = useRef(amount);
   amountRef.current = amount;
 
@@ -64,6 +66,14 @@ export default function DriverPage() {
   const { dismissed: bannerDismissed, dismiss: dismissBanner } = useSetupBanner();
   const { tokens } = useBidiTheme();
   const navigate = useNavigate();
+
+  const applyPhoneForTopUp = useCallback((phone: string | null | undefined) => {
+    const display = toDisplayLocalPhone(phone);
+    setFundPhone(display);
+    const detectedNetwork = detectGhanaMomoNetwork(display);
+    lastDetectedProviderRef.current = detectedNetwork?.provider ?? null;
+    setFundProvider(detectedNetwork?.provider ?? null);
+  }, []);
 
   const executeBuy = useCallback(
     async (buyValue: number) => {
@@ -128,12 +138,12 @@ export default function DriverPage() {
         onConfirm: () => {
           resumeBuyAfterFundRef.current = true;
           setFundAmount(formatAmountInput(suggested));
-          setFundPhone(toDisplayLocalPhone(user?.phone));
+          applyPhoneForTopUp(user?.phone);
           setTopUpOpen(true);
         },
       });
     },
-    [showConfirm, user?.phone],
+    [applyPhoneForTopUp, showConfirm, user?.phone],
   );
 
   const handleFundingSettledSuccess = useCallback(
@@ -203,7 +213,7 @@ export default function DriverPage() {
 
   const openTopUp = () => {
     resumeBuyAfterFundRef.current = false;
-    setFundPhone(toDisplayLocalPhone(user?.phone));
+    applyPhoneForTopUp(user?.phone);
     setTopUpOpen(true);
   };
 
@@ -216,19 +226,37 @@ export default function DriverPage() {
   const buyNum = Number(amount);
   const localPhone = normalizeGhanaLocalPhone(fundPhone);
   const detected = detectGhanaMomoNetwork(fundPhone);
-  const phoneValid = isValidGhanaLocalMsisdn(localPhone) && !!detected;
+  const phoneValid = isValidGhanaLocalMsisdn(localPhone) && !!fundProvider;
   const isValidFund =
     fundAmount !== '' && !Number.isNaN(fundNum) && isAmountInGuidanceRange(fundNum);
   const isValidAmount =
     amount !== '' && !Number.isNaN(buyNum) && isAmountInGuidanceRange(buyNum);
   const canSubmitFund = isValidFund && phoneValid && !funding && !pendingFunding;
 
+  useEffect(() => {
+    const next = detected?.provider ?? null;
+    if (next !== lastDetectedProviderRef.current) {
+      lastDetectedProviderRef.current = next;
+      if (next) setFundProvider(next);
+    }
+  }, [detected?.provider]);
+
+  const phoneFieldError =
+    (!!fundPhone && !isValidGhanaLocalMsisdn(localPhone) && localPhone.length >= 10) ||
+    (isValidGhanaLocalMsisdn(localPhone) && !fundProvider);
+
   const phoneHint =
-    fundPhone.length >= 3 && !detected
-      ? 'Unrecognized network prefix — check the number'
-      : fundPhone !== '' && !isValidGhanaLocalMsisdn(localPhone) && localPhone.length >= 10
-        ? 'Enter a 10-digit Ghana number starting with 0'
-        : null;
+    fundPhone !== '' && !isValidGhanaLocalMsisdn(localPhone) && localPhone.length >= 10
+      ? 'Enter a 10-digit Ghana number starting with 0'
+      : localPhone.length >= 3 && !detected
+        ? "Couldn't detect network — select one"
+        : isValidGhanaLocalMsisdn(localPhone) && !fundProvider
+          ? 'Select the MoMo network for this number'
+          : detected && fundProvider && fundProvider !== detected.provider
+            ? `Using ${fundingProviderLabel(fundProvider)}`
+            : detected && fundProvider === detected.provider
+              ? `${detected.label} suggested from number`
+              : 'Pre-filled with your login number — edit if funding from another wallet';
 
   const handleBuy = async () => {
     if (!isValidAmount) {
@@ -261,15 +289,15 @@ export default function DriverPage() {
   };
 
   const handleFund = async () => {
-    if (!detected) {
+    if (!fundProvider) {
       void hapticError();
       showAlert({
-        title: 'Network unknown',
-        message: 'Enter a valid MTN, Telecel, or AT MoMo number.',
+        title: 'Network required',
+        message: 'Select MTN, Telecel, or AT for this MoMo number.',
       });
       return;
     }
-    const ok = await submitFunding(fundNum, detected.provider, fundPhone);
+    const ok = await submitFunding(fundNum, fundProvider, fundPhone);
     if (ok) {
       setFundAmount('');
       resetFundKey();
@@ -332,7 +360,7 @@ export default function DriverPage() {
           Purchase a token with your wallet balance
         </p>
 
-        <UssdSetupBanner
+        <CrossPlatformHint
           needsPin={user?.needsPin}
           needsProfile={user?.needsProfile}
           visible={!bannerDismissed}
@@ -352,11 +380,7 @@ export default function DriverPage() {
             topRight={
               <button
                 type="button"
-                className="bidi-chip"
-                style={{
-                  backgroundColor: tokens.onGradientOverlay,
-                  color: tokens.onGradient,
-                }}
+                className="bidi-wallet-btn bidi-wallet-btn--primary"
                 onClick={openTopUp}
                 disabled={!!pendingFunding}
               >
@@ -389,8 +413,7 @@ export default function DriverPage() {
                       {pendingAction === 'submit_otp' ? (
                         <button
                           type="button"
-                          className="bidi-link-btn"
-                          style={{ color: tokens.onGradient }}
+                          className="bidi-wallet-btn bidi-wallet-btn--primary"
                           onClick={openOtpSheet}
                         >
                           Enter SMS code
@@ -398,8 +421,7 @@ export default function DriverPage() {
                       ) : null}
                       <button
                         type="button"
-                        className="bidi-link-btn"
-                        style={{ color: tokens.onGradient }}
+                        className="bidi-wallet-btn bidi-wallet-btn--secondary"
                         onClick={checkBalanceNow}
                       >
                         Check balance now
@@ -407,8 +429,7 @@ export default function DriverPage() {
                       {pendingExpired ? (
                         <button
                           type="button"
-                          className="bidi-link-btn"
-                          style={{ color: tokens.onGradient }}
+                          className="bidi-wallet-btn bidi-wallet-btn--ghost"
                           onClick={() => void dismissPending()}
                         >
                           I&apos;ll check later
@@ -417,13 +438,9 @@ export default function DriverPage() {
                     </div>
                   </div>
                 ) : null}
-                <Link
-                  to="/app/ledger"
-                  className="bidi-inline-link"
-                  style={{ color: tokens.onGradient }}
-                >
+                <Link to="/app/ledger" className="bidi-wallet-btn bidi-wallet-btn--secondary">
                   View activity
-                  <span className="material-symbols-outlined" style={{ fontSize: 20 }} aria-hidden>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }} aria-hidden>
                     chevron_right
                   </span>
                 </Link>
@@ -490,31 +507,57 @@ export default function DriverPage() {
           </p>
           <label className="bidi-field">
             <span className="bidi-field__label">MoMo number</span>
-            <div className="bidi-field__row">
-              <input
-                className="bidi-input"
-                inputMode="tel"
-                autoComplete="tel"
-                value={fundPhone}
-                onChange={(e) => {
-                  setFundPhone(e.target.value);
-                  resetFundKey();
-                }}
-                aria-invalid={!!phoneHint}
-                aria-label="MoMo phone number"
-              />
-              <MomoProviderBadge provider={detected?.provider ?? null} />
-            </div>
+            <input
+              className="bidi-input"
+              inputMode="tel"
+              autoComplete="tel"
+              value={fundPhone}
+              onChange={(e) => {
+                setFundPhone(e.target.value);
+                resetFundKey();
+              }}
+              aria-invalid={phoneFieldError}
+              aria-label="MoMo phone number"
+            />
           </label>
+          <div className="bidi-field">
+            <span className="bidi-field__label" id="momo-network-label">
+              Network
+            </span>
+            <div
+              className="bidi-segmented"
+              role="group"
+              aria-labelledby="momo-network-label"
+            >
+              {FUNDING_PROVIDERS.map((option) => {
+                const active = fundProvider === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`bidi-segmented__btn${active ? ' bidi-segmented__btn--active' : ''}`}
+                    style={{
+                      backgroundColor: active ? tokens.accentTint : 'transparent',
+                      color: active ? tokens.brand.accent600 : tokens.textSecondary,
+                    }}
+                    aria-pressed={active}
+                    onClick={() => {
+                      void hapticLight();
+                      setFundProvider(option.value);
+                      resetFundKey();
+                    }}
+                  >
+                    {option.shortLabel}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <p
-            className={phoneHint ? 'bidi-field__error' : 'bidi-hint'}
-            style={{ color: phoneHint ? undefined : tokens.textSecondary }}
+            className={phoneFieldError ? 'bidi-field__error' : 'bidi-hint'}
+            style={{ color: phoneFieldError ? undefined : tokens.textSecondary }}
           >
-            {phoneHint
-              ? phoneHint
-              : detected
-                ? `${detected.label} detected`
-                : 'Pre-filled with your login number — edit if funding from another wallet'}
+            {phoneHint}
           </p>
           <label className="bidi-field bidi-mt-3">
             <span className="bidi-field__label">Amount (E.g., 100)</span>
@@ -560,7 +603,7 @@ export default function DriverPage() {
             {fundingOtpTitle(pendingFunding?.displayText)}
           </h2>
           <p className="bidi-sheet-message" style={{ color: tokens.textSecondary }}>
-            {OTP_NOT_PIN_HINT} Your Mobile Money PIN is entered only on your phone.
+            {OTP_NOT_PIN_HINT}.
           </p>
           <label className="bidi-field">
             <span className="bidi-field__label">SMS code</span>

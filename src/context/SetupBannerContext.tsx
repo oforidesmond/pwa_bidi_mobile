@@ -17,7 +17,7 @@ type SetupBannerState = {
 
 const SetupBannerContext = createContext<SetupBannerState | undefined>(undefined);
 
-/** Session-scoped dismiss for the USSD setup banner across driver tabs. */
+/** Session-scoped dismiss for the cross-platform / setup hint across driver tabs. */
 export function SetupBannerProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [dismissed, setDismissed] = useState(false);

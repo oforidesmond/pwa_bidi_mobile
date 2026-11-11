@@ -1,7 +1,7 @@
 import { getDriverTransactions } from '@/api/driver';
 import { CategoryIconChip } from '@/components/CategoryIconChip';
 import { EmptyState } from '@/components/EmptyState';
-import { UssdSetupBanner } from '@/components/UssdSetupBanner';
+import { CrossPlatformHint } from '@/components/CrossPlatformHint';
 import { useAuth } from '@/context/AuthContext';
 import { useFeedback } from '@/context/FeedbackContext';
 import { useSetupBanner } from '@/context/SetupBannerContext';
@@ -179,7 +179,7 @@ export default function TokensPage() {
           </button>
         </div>
 
-        <UssdSetupBanner
+        <CrossPlatformHint
           needsPin={user?.needsPin}
           needsProfile={user?.needsProfile}
           visible={!bannerDismissed}

@@ -3,6 +3,7 @@ import { AttendantRoutes, DriverRoutes, ExploreRoute } from '@/components/RoleGa
 import { RequireAuth } from '@/components/RequireAuth';
 import DriverLoginPage from '@/pages/DriverLoginPage';
 import DriverPage from '@/pages/DriverPage';
+import DriverSetupPage from '@/pages/DriverSetupPage';
 import ExplorePage from '@/pages/ExplorePage';
 import HomeRedirect from '@/pages/HomeRedirect';
 import LedgerPage from '@/pages/LedgerPage';
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="profile" element={<ProfilePage />} />
           <Route element={<DriverRoutes />}>
             <Route path="driver" element={<DriverPage />} />
+            <Route path="setup" element={<DriverSetupPage />} />
             <Route path="tokens" element={<TokensPage />} />
             <Route path="tokens/:id" element={<TokenDetailPage />} />
             <Route path="ledger" element={<LedgerPage />} />

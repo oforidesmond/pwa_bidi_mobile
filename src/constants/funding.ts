@@ -6,7 +6,7 @@ export type FundingProviderOption = {
   shortLabel: string;
 };
 
-/** Labels for pending UI / badges (detection drives provider, not chip picker). */
+/** MoMo networks for top-up selector, pending UI, and badges. */
 export const FUNDING_PROVIDERS: FundingProviderOption[] = [
   { value: 'MTN_MOMO', label: 'MTN MoMo', shortLabel: 'MTN' },
   { value: 'VODAFONE_CASH', label: 'Telecel Cash', shortLabel: 'Telecel' },
@@ -16,8 +16,14 @@ export const FUNDING_PROVIDERS: FundingProviderOption[] = [
 /** Storage key prefix; append `:${userId}`. */
 export const PENDING_FUNDING_STORAGE_PREFIX = 'pending_wallet_funding';
 
-/** How long to show "Awaiting approval" before "Still waiting" (MoMo prompts die fast). */
-export const PENDING_FUNDING_TTL_MS = 5 * 60 * 1000;
+/**
+ * After this, show "Still waiting" / "I'll check later" so the driver can dismiss
+ * and retry without waiting out the full MoMo/Paystack window.
+ */
+export const PENDING_FUNDING_TTL_MS = 60 * 1000;
+
+/** Keep polling status after dismiss becomes available (fail/abandoned often land late). */
+export const PENDING_FUNDING_POLL_MAX_MS = 5 * 60 * 1000;
 
 /** Faster poll while the handset prompt is most likely still open (Paystack ~180s). */
 export const FUNDING_POLL_FAST_MS = 5_000;

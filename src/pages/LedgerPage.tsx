@@ -11,7 +11,7 @@ import {
 import { EmptyState } from '@/components/EmptyState';
 import { MomoTrustFooter } from '@/components/MomoTrustFooter';
 import { Sheet } from '@/components/Sheet';
-import { UssdSetupBanner } from '@/components/UssdSetupBanner';
+import { CrossPlatformHint } from '@/components/CrossPlatformHint';
 import { useAuth } from '@/context/AuthContext';
 import { useFeedback } from '@/context/FeedbackContext';
 import { useSetupBanner } from '@/context/SetupBannerContext';
@@ -310,7 +310,7 @@ export default function LedgerPage() {
           </button>
         </div>
 
-        <UssdSetupBanner
+        <CrossPlatformHint
           needsPin={user?.needsPin}
           needsProfile={user?.needsProfile}
           visible={!bannerDismissed}

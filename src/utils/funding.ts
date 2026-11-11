@@ -3,6 +3,7 @@ import {
   FUNDING_POLL_FAST_MS,
   FUNDING_POLL_FAST_WINDOW_MS,
   FUNDING_POLL_SLOW_MS,
+  PENDING_FUNDING_POLL_MAX_MS,
   PENDING_FUNDING_TTL_MS,
 } from '@/constants/funding';
 
@@ -26,7 +27,7 @@ export const APPROVE_ON_PHONE_COPY =
 export const CONFIRMING_PAYMENT_COPY = 'Confirming payment…';
 
 /** Shown under the SMS field so it is not confused with the handset PIN. */
-export const OTP_NOT_PIN_HINT = 'This is the SMS code, not your MoMo PIN.';
+export const OTP_NOT_PIN_HINT = 'This is the SMS code, not your MoMo PIN';
 
 export function parseBalance(value: string | number | null | undefined): number {
   const n = typeof value === 'number' ? value : Number(value);
@@ -41,15 +42,37 @@ export function isFundingSettled(
   return parseBalance(availableBalance) > baselineAvailable + 0.001;
 }
 
+/** Normalize API / Paystack-style status strings for comparison. */
+export function normalizeFundingStatus(
+  status: FundingStatus | string | null | undefined,
+): string {
+  return String(status ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
+}
+
 export function isFundingSuccessful(status: FundingStatus | string | null | undefined): boolean {
-  return String(status ?? '').toUpperCase() === 'SUCCESSFUL';
+  const s = normalizeFundingStatus(status);
+  // API: SUCCESSFUL. Defensive: raw Paystack `success` if it ever leaks through.
+  return s === 'SUCCESSFUL' || s === 'SUCCESS';
 }
 
 export function isTerminalFundingFailure(
   status: FundingStatus | string | null | undefined,
 ): boolean {
-  const s = String(status ?? '').toUpperCase();
-  return s === 'FAILED' || s === 'CANCELLED' || s === 'EXPIRED';
+  const s = normalizeFundingStatus(status);
+  // API terminals + Paystack aliases the backend normally folds into FAILED/EXPIRED.
+  return (
+    s === 'FAILED' ||
+    s === 'FAIL' ||
+    s === 'CANCELLED' ||
+    s === 'CANCELED' ||
+    s === 'EXPIRED' ||
+    s === 'ABANDONED' ||
+    s === 'REVERSED' ||
+    s === 'TIMEOUT'
+  );
 }
 
 export function fundingTerminalFailureCopy(
@@ -57,9 +80,13 @@ export function fundingTerminalFailureCopy(
   failureReason?: string | null,
 ): string {
   if (failureReason && failureReason.trim()) return failureReason.trim();
-  const s = String(status ?? '').toUpperCase();
-  if (s === 'CANCELLED') return 'Payment was cancelled.';
-  if (s === 'EXPIRED') return 'The Mobile Money prompt expired before approval.';
+  const s = normalizeFundingStatus(status);
+  if (s === 'CANCELLED' || s === 'CANCELED') return 'Payment was cancelled.';
+  if (s === 'EXPIRED' || s === 'TIMEOUT') {
+    return 'The Mobile Money prompt expired before approval.';
+  }
+  if (s === 'ABANDONED') return 'Payment was abandoned before it was completed.';
+  if (s === 'REVERSED') return 'Payment was reversed.';
   return 'Payment was not completed.';
 }
 
@@ -69,6 +96,15 @@ export function isPendingFundingExpired(
   ttlMs = PENDING_FUNDING_TTL_MS,
 ): boolean {
   return now - submittedAt >= ttlMs;
+}
+
+/** True when we should stop background status polling for a stuck pending top-up. */
+export function isPendingFundingPollExhausted(
+  submittedAt: number,
+  now = Date.now(),
+  maxMs = PENDING_FUNDING_POLL_MAX_MS,
+): boolean {
+  return now - submittedAt >= maxMs;
 }
 
 export function fundingPollIntervalMs(submittedAt: number, now = Date.now()): number {

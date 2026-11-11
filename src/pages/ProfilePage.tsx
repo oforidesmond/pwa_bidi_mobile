@@ -1,7 +1,7 @@
 import { logout as logoutAPI } from '@/api/auth';
 import { AuthLegalFooter } from '@/components/AuthLegalFooter';
 import { MomoTrustFooter } from '@/components/MomoTrustFooter';
-import { UssdSetupBanner } from '@/components/UssdSetupBanner';
+import { CrossPlatformHint } from '@/components/CrossPlatformHint';
 import { useAuth, type RoleName } from '@/context/AuthContext';
 import { useDialog } from '@/context/DialogContext';
 import { useSetupBanner } from '@/context/SetupBannerContext';
@@ -66,7 +66,7 @@ export default function ProfilePage() {
     <div className="bidi-scroll-page" style={{ backgroundColor: tokens.surfaceBg }}>
       <div className="bidi-scroll-inner">
         {isDriver ? (
-          <UssdSetupBanner
+          <CrossPlatformHint
             needsPin={user?.needsPin}
             needsProfile={user?.needsProfile}
             visible={!bannerDismissed}

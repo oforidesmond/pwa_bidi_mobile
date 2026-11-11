@@ -177,6 +177,11 @@ export interface WalletBalance {
 /** Driver `POST /wallet/funding` MoMo providers (Korba collections). */
 export type FundingProvider = 'MTN_MOMO' | 'VODAFONE_CASH' | 'AIRTELTIGO_MONEY';
 
+/**
+ * Local funding row status from GET/POST /wallet/funding*.
+ * Paystack verify uses lowercase `success` / `failed` / `abandoned` / etc.;
+ * the backend maps those into this enum (abandoned/reversed → FAILED).
+ */
 export type FundingStatus =
   | 'PENDING'
   | 'SUCCESSFUL'

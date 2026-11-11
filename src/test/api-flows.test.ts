@@ -1,5 +1,11 @@
 import { confirmToken, rejectToken, reserveToken } from '@/api/attendant';
-import { verifyDriverOtp } from '@/api/auth';
+import {
+  confirmDriverPinReset,
+  loginWithDriverPin,
+  requestDriverPinReset,
+  setDriverPin,
+  verifyDriverOtp,
+} from '@/api/auth';
 import { buyFuelToken } from '@/api/driver';
 import { createIdempotencyKey } from '@/api/idempotency';
 import { getWalletFunding, startWalletFunding, submitWalletFundingOtp } from '@/api/wallet';
@@ -71,6 +77,91 @@ describe('driver OTP verify typing surface', () => {
     });
     await expect(verifyDriverOtp('0242222222', '000000')).rejects.toMatchObject({
       response: { data: { message: 'Invalid OTP. 2 attempts remaining.' } },
+    });
+  });
+});
+
+describe('driver PIN auth contracts', () => {
+  beforeEach(() => {
+    mockPost.mockReset();
+  });
+
+  it('loginWithDriverPin posts phone + pin', async () => {
+    mockPost.mockResolvedValue({
+      data: {
+        access_token: 'pin-tok',
+        driver: {
+          id: 'd1',
+          phone: '233242222222',
+          ownerType: 'DRIVER',
+          needsPin: false,
+          needsProfile: false,
+        },
+      },
+    });
+    const res = await loginWithDriverPin('0242222222', '1234');
+    expect(res.access_token).toBe('pin-tok');
+    expect(mockPost).toHaveBeenCalledWith('/auth/driver/pin/login', {
+      phone: '0242222222',
+      pin: '1234',
+    });
+  });
+
+  it('setDriverPin sends names when completing profile', async () => {
+    mockPost.mockResolvedValue({
+      data: {
+        success: true,
+        driver: {
+          id: 'd1',
+          needsPin: false,
+          needsProfile: false,
+          firstName: 'Ama',
+          lastName: 'Mensah',
+        },
+      },
+    });
+    const res = await setDriverPin({
+      pin: '4321',
+      confirmPin: '4321',
+      firstName: 'Ama',
+      lastName: 'Mensah',
+    });
+    expect(res.driver.needsPin).toBe(false);
+    expect(mockPost).toHaveBeenCalledWith('/auth/driver/pin/set', {
+      pin: '4321',
+      confirmPin: '4321',
+      firstName: 'Ama',
+      lastName: 'Mensah',
+    });
+  });
+
+  it('forgot PIN request + confirm endpoints', async () => {
+    mockPost
+      .mockResolvedValueOnce({
+        data: { success: true, message: 'sent', debugCode: '111111' },
+      })
+      .mockResolvedValueOnce({
+        data: { success: true, message: 'PIN updated. Sign in with your new PIN.' },
+      });
+
+    const req = await requestDriverPinReset('0242222222');
+    expect(req.success).toBe(true);
+    expect(mockPost).toHaveBeenCalledWith('/auth/driver/pin/forgot/request', {
+      phone: '0242222222',
+    });
+
+    const conf = await confirmDriverPinReset({
+      phone: '0242222222',
+      code: '111111',
+      newPin: '9999',
+      confirmPin: '9999',
+    });
+    expect(conf.success).toBe(true);
+    expect(mockPost).toHaveBeenCalledWith('/auth/driver/pin/forgot/confirm', {
+      phone: '0242222222',
+      code: '111111',
+      newPin: '9999',
+      confirmPin: '9999',
     });
   });
 });
