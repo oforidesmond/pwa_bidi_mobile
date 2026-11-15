@@ -132,6 +132,8 @@ export type LedgerEntryMetadata = {
   provider?: string;
   phoneMasked?: string;
   gateway?: string;
+  /** Funding origin: ussd | app | bank_transfer */
+  channel?: 'ussd' | 'app' | 'bank_transfer' | string;
   tokenCodeMasked?: string;
   kind?: 'REJECT' | 'REVERSAL' | string;
   [key: string]: unknown;

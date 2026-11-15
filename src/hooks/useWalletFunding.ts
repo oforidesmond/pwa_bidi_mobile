@@ -8,6 +8,7 @@ import {
 } from '@/api/wallet';
 import {
   PENDING_FUNDING_TTL_MS,
+  dismissedFundingStorageKey,
   isBankTransferProvider,
   pendingFundingStorageKey,
 } from '@/constants/funding';
@@ -98,6 +99,51 @@ function pendingFromCreate(
   };
 }
 
+async function readDismissedFundingIds(userId: string): Promise<string[]> {
+  try {
+    const raw = await storage.getItem(dismissedFundingStorageKey(userId));
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((id): id is string => typeof id === 'string' && id.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+async function rememberDismissedFundingId(
+  userId: string,
+  fundingId: string,
+): Promise<void> {
+  const existing = await readDismissedFundingIds(userId);
+  if (existing.includes(fundingId)) return;
+  // Cap list so a long-lived install cannot grow forever.
+  const next = [...existing, fundingId].slice(-20);
+  try {
+    await storage.setItem(dismissedFundingStorageKey(userId), JSON.stringify(next));
+  } catch {
+    // Non-fatal — in-memory dismiss still holds for this session via clearPending.
+  }
+}
+
+async function forgetDismissedFundingId(
+  userId: string,
+  fundingId: string,
+): Promise<void> {
+  const existing = await readDismissedFundingIds(userId);
+  const next = existing.filter((id) => id !== fundingId);
+  if (next.length === existing.length) return;
+  try {
+    if (next.length === 0) {
+      await storage.removeItem(dismissedFundingStorageKey(userId));
+    } else {
+      await storage.setItem(dismissedFundingStorageKey(userId), JSON.stringify(next));
+    }
+  } catch {
+    // Non-fatal.
+  }
+}
+
 export function useWalletFunding({
   userId,
   showMessage,
@@ -158,6 +204,10 @@ export function useWalletFunding({
 
   const onSettledSuccess = useCallback(
     async (availableBalance: string | number) => {
+      const fundingId = pendingRef.current?.fundingId;
+      if (userId && fundingId) {
+        await forgetDismissedFundingId(userId, fundingId);
+      }
       await clearPending();
       fundKeyRef.current = null;
       hapticSuccess();
@@ -165,12 +215,16 @@ export function useWalletFunding({
       showMessage('Wallet funded — balance updated.');
       onFundingSettledSuccessRef.current?.(availableBalance);
     },
-    [clearPending, showMessage],
+    [clearPending, showMessage, userId],
   );
 
   const onSettledFailure = useCallback(
     async (status: string | undefined, failureReason?: string | null) => {
       const provider = pendingRef.current?.provider;
+      const fundingId = pendingRef.current?.fundingId;
+      if (userId && fundingId) {
+        await forgetDismissedFundingId(userId, fundingId);
+      }
       await clearPending();
       fundKeyRef.current = null;
       await hapticError();
@@ -179,7 +233,7 @@ export function useWalletFunding({
         message: fundingTerminalFailureCopy(status, failureReason, provider),
       });
     },
-    [clearPending, showAlert],
+    [clearPending, showAlert, userId],
   );
 
   const applyBalance = useCallback(
@@ -201,14 +255,19 @@ export function useWalletFunding({
   /**
    * Adopt a backend PENDING row (e.g. USSD top-up) so the PWA can poll/reconcile
    * even when this device never called POST /wallet/funding.
+   * Skips ids the driver already dismissed with "I'll check later".
    */
   const adoptBackendPending = useCallback(
     async (baselineAvailable: number): Promise<boolean> => {
-      if (pendingRef.current) return false;
+      if (!userId || pendingRef.current) return false;
       try {
         const row = await getPendingWalletFunding();
         if (!row?.id) return false;
         if (isFundingSuccessful(row.status) || isTerminalFundingFailure(row.status)) {
+          return false;
+        }
+        const dismissed = await readDismissedFundingIds(userId);
+        if (dismissed.includes(row.id)) {
           return false;
         }
         const amount = parseBalance(row.amount);
@@ -236,7 +295,7 @@ export function useWalletFunding({
         return false;
       }
     },
-    [persistPending],
+    [persistPending, userId],
   );
 
   const loadBalance = useCallback(async () => {
@@ -671,10 +730,14 @@ export function useWalletFunding({
   );
 
   const dismissPending = useCallback(async () => {
+    const fundingId = pendingRef.current?.fundingId;
+    if (userId && fundingId) {
+      await rememberDismissedFundingId(userId, fundingId);
+    }
     await clearPending();
     fundKeyRef.current = null;
     showMessage('You can top up again anytime. Balance still updates if payment lands.');
-  }, [clearPending, showMessage]);
+  }, [clearPending, showMessage, userId]);
 
   const dismissOtpSheet = useCallback(() => {
     setOtpSheetOpen(false);

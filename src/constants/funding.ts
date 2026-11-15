@@ -22,6 +22,12 @@ export const LAST_FUNDING_METHOD_KEY = 'driver_last_funding_method';
 export const PENDING_FUNDING_STORAGE_PREFIX = 'pending_wallet_funding';
 
 /**
+ * Funding ids the driver dismissed with "I'll check later".
+ * Prevents re-adopting the same backend PENDING (e.g. USSD) on every tab focus.
+ */
+export const DISMISSED_FUNDING_STORAGE_PREFIX = 'dismissed_wallet_funding';
+
+/**
  * After this, show "Still waiting" / "I'll check later" so the driver can dismiss
  * and retry without waiting out the full MoMo/Paystack window.
  */
@@ -59,6 +65,10 @@ export function isMomoFundingProvider(
 
 export function pendingFundingStorageKey(userId: string): string {
   return `${PENDING_FUNDING_STORAGE_PREFIX}:${userId}`;
+}
+
+export function dismissedFundingStorageKey(userId: string): string {
+  return `${DISMISSED_FUNDING_STORAGE_PREFIX}:${userId}`;
 }
 
 /** Mask MSISDN for UI, e.g. 0241234567 → 024***4567 */

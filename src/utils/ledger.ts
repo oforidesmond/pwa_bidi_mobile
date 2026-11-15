@@ -46,6 +46,24 @@ function providerShortLabel(provider: string | undefined): string | null {
   return provider.replace(/_/g, ' ');
 }
 
+/** Compact label for list rows. */
+function fundingChannelShortLabel(channel: string | undefined): string | null {
+  if (!channel) return null;
+  const c = channel.trim().toLowerCase();
+  if (c === 'ussd') return 'USSD';
+  if (c === 'app' || c === 'bank_transfer') return 'App';
+  return null;
+}
+
+/** Full label for activity detail. */
+function fundingChannelDetailLabel(channel: string | undefined): string | null {
+  if (!channel) return null;
+  const c = channel.trim().toLowerCase();
+  if (c === 'ussd') return 'USSD';
+  if (c === 'app' || c === 'bank_transfer') return 'Mobile app';
+  return null;
+}
+
 export function formatLedgerShortTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
@@ -109,6 +127,11 @@ export function ledgerDetailRows(entry: LedgerEntry): LedgerDetailRow[] {
     rows.push({ label: isBankTopUp ? 'Method' : 'Network', value: network });
   }
 
+  const via = fundingChannelDetailLabel(
+    typeof meta?.channel === 'string' ? meta.channel : undefined,
+  );
+  if (via) rows.push({ label: 'Via', value: via });
+
   const phone = nonEmpty(meta?.phoneMasked);
   if (phone && !isBankTopUp) rows.push({ label: 'Phone', value: phone });
 
@@ -148,6 +171,9 @@ export function ledgerSubtitle(entry: Pick<LedgerEntry, 'reason' | 'createdAt' |
     const provider =
       typeof meta.provider === 'string' ? meta.provider : undefined;
     const network = providerShortLabel(provider);
+    const channel = fundingChannelShortLabel(
+      typeof meta.channel === 'string' ? meta.channel : undefined,
+    );
     const phone =
       typeof meta.phoneMasked === 'string' && meta.phoneMasked.trim()
         ? meta.phoneMasked.trim()
@@ -157,7 +183,8 @@ export function ledgerSubtitle(entry: Pick<LedgerEntry, 'reason' | 'createdAt' |
       String(provider ?? '').toUpperCase() === 'BANK';
     const parts = [isBank ? 'Bank transfer top-up' : 'MoMo top-up'];
     if (network && !isBank) parts.push(network);
-    if (phone && !isBank) parts.push(phone);
+    if (channel) parts.push(channel);
+    else if (phone && !isBank) parts.push(phone);
     if (parts.length > 1 || isBank) return parts.join(' · ');
   }
 
