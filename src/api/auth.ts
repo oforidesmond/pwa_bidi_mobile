@@ -123,3 +123,35 @@ export const confirmDriverPinReset = async (body: {
   });
   return response.data as { success: boolean; message?: string };
 };
+
+/** Staff password reset: phone → SMS OTP → resetToken → new password. */
+export const requestStaffPasswordReset = async (phone: string) => {
+  const response = await api.post('/auth/forgot-password', {
+    identifier: normalizePhone(phone),
+  });
+  return response.data as {
+    success: boolean;
+    message?: string;
+    expiresAt?: string;
+    debugCode?: string;
+  };
+};
+
+export const verifyStaffPasswordReset = async (phone: string, code: string) => {
+  const response = await api.post('/auth/forgot-password/verify', {
+    identifier: normalizePhone(phone),
+    code: code.trim(),
+  });
+  return response.data as { resetToken: string; expiresIn: number };
+};
+
+export const resetStaffPassword = async (body: {
+  resetToken: string;
+  password: string;
+}) => {
+  const response = await api.post('/auth/forgot-password/reset', {
+    resetToken: body.resetToken,
+    password: body.password,
+  });
+  return response.data as { success: boolean; message?: string };
+};

@@ -3,8 +3,11 @@ import {
   confirmDriverPinReset,
   loginWithDriverPin,
   requestDriverPinReset,
+  requestStaffPasswordReset,
+  resetStaffPassword,
   setDriverPin,
   verifyDriverOtp,
+  verifyStaffPasswordReset,
 } from '@/api/auth';
 import { buyFuelToken } from '@/api/driver';
 import { createIdempotencyKey } from '@/api/idempotency';
@@ -162,6 +165,48 @@ describe('driver PIN auth contracts', () => {
       code: '111111',
       newPin: '9999',
       confirmPin: '9999',
+    });
+  });
+});
+
+describe('staff password reset endpoints', () => {
+  beforeEach(() => {
+    mockPost.mockReset();
+  });
+
+  it('request → verify → reset flow', async () => {
+    mockPost
+      .mockResolvedValueOnce({
+        data: { success: true, message: 'If an eligible account exists, a reset code has been sent' },
+      })
+      .mockResolvedValueOnce({
+        data: { resetToken: 'reset-jwt', expiresIn: 1800 },
+      })
+      .mockResolvedValueOnce({
+        data: { success: true, message: 'Password updated. Please log in.' },
+      });
+
+    const req = await requestStaffPasswordReset('0244123456');
+    expect(req.success).toBe(true);
+    expect(mockPost).toHaveBeenCalledWith('/auth/forgot-password', {
+      identifier: '0244123456',
+    });
+
+    const verified = await verifyStaffPasswordReset('0244123456', '123456');
+    expect(verified.resetToken).toBe('reset-jwt');
+    expect(mockPost).toHaveBeenCalledWith('/auth/forgot-password/verify', {
+      identifier: '0244123456',
+      code: '123456',
+    });
+
+    const reset = await resetStaffPassword({
+      resetToken: 'reset-jwt',
+      password: 'newpass12',
+    });
+    expect(reset.success).toBe(true);
+    expect(mockPost).toHaveBeenCalledWith('/auth/forgot-password/reset', {
+      resetToken: 'reset-jwt',
+      password: 'newpass12',
     });
   });
 });

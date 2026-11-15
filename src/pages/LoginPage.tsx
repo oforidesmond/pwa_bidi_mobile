@@ -131,6 +131,12 @@ export default function LoginPage() {
             ) : null}
           </label>
 
+          <div className="bidi-row-links bidi-mt-2">
+            <Link to="/login-staff/forgot" className="bidi-link" style={{ color: tokens.brand.accent500 }}>
+              Forgot password?
+            </Link>
+          </div>
+
           <button
             type="button"
             className="bidi-btn bidi-btn--primary bidi-mt-4"

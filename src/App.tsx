@@ -11,6 +11,7 @@ import LoginPage from '@/pages/LoginPage';
 import ProfilePage from '@/pages/ProfilePage';
 import SalesPage from '@/pages/SalesPage';
 import SellPage from '@/pages/SellPage';
+import StaffForgotPasswordPage from '@/pages/StaffForgotPasswordPage';
 import TokenDetailPage from '@/pages/TokenDetailPage';
 import TokensPage from '@/pages/TokensPage';
 import { Navigate, Route, Routes } from 'react-router-dom';
@@ -21,6 +22,7 @@ export default function App() {
       <Route path="/" element={<Navigate to="/app" replace />} />
       <Route path="/login" element={<DriverLoginPage />} />
       <Route path="/login-staff" element={<LoginPage />} />
+      <Route path="/login-staff/forgot" element={<StaffForgotPasswordPage />} />
       <Route path="/login-driver" element={<Navigate to="/login" replace />} />
       <Route path="/app" element={<RequireAuth />}>
         <Route element={<AppShell />}>

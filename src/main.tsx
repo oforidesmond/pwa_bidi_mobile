@@ -1,3 +1,4 @@
+import { PwaUpdatePrompt } from '@/components/PwaUpdatePrompt';
 import { AuthProvider } from '@/context/AuthContext';
 import { DialogProvider } from '@/context/DialogContext';
 import { FeedbackProvider } from '@/context/FeedbackContext';
@@ -20,6 +21,7 @@ createRoot(document.getElementById('root')!).render(
               <SetupBannerProvider>
                 <InstallPromptProvider>
                   <App />
+                  <PwaUpdatePrompt />
                 </InstallPromptProvider>
               </SetupBannerProvider>
             </AuthProvider>

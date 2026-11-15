@@ -10,7 +10,10 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // Prompt the user before activating a waiting service worker (see PwaUpdatePrompt).
+      registerType: 'prompt',
+      // Registration is handled by virtual:pwa-register/react — avoid double-inject.
+      injectRegister: false,
       includeAssets: [
         'bidi-logo-light.png',
         'bidi-logo-dark.png',

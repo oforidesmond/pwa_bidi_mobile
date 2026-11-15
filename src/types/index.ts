@@ -56,6 +56,13 @@ export interface Transaction {
     contact?: string | null;
   };
   attendant?: { id: string; firstName?: string; lastName?: string };
+  driver?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    phone?: string | null;
+    nationalId?: string | null;
+  } | null;
   pump?: { id: string; pumpNumber: number | string };
   liters?: number | null;
   amount?: number | string | null;

@@ -80,9 +80,15 @@ export type AttendantPumpOption = {
   productCatalogId?: string;
 };
 
+export type AttendantProductOption = {
+  id: string;
+  name: string;
+  pricePerLiter?: number | string | null;
+};
+
 export type AttendantBootstrap = {
   stationId: string | null;
-  products: Array<{ id: string; name: string }>;
+  products: AttendantProductOption[];
   pumps: AttendantPumpOption[];
 };
 
@@ -112,7 +118,44 @@ function mapPump(p: Record<string, unknown>, dispenser?: Record<string, unknown>
   };
 }
 
-/** Normalize GET /attendants/me/available-products (assignedPumps and/or station.dispensers). */
+function pumpNumberSortValue(n: number | string): number {
+  const parsed = typeof n === 'number' ? n : Number(n);
+  return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
+}
+
+/** Pick the assigned pump for a product (lowest pumpNumber if several). */
+export function resolvePumpForProduct(
+  pumps: AttendantPumpOption[],
+  productId: string | null | undefined,
+  productName?: string | null,
+): AttendantPumpOption | null {
+  if (!pumps.length) return null;
+
+  const byCatalog = productId
+    ? pumps.filter((p) => p.productCatalogId && p.productCatalogId === productId)
+    : [];
+  const matched =
+    byCatalog.length > 0
+      ? byCatalog
+      : productName
+        ? pumps.filter(
+            (p) =>
+              p.productName &&
+              p.productName.toLowerCase() === productName.toLowerCase(),
+          )
+        : [];
+
+  if (matched.length === 0) return null;
+
+  return [...matched].sort(
+    (a, b) => pumpNumberSortValue(a.pumpNumber) - pumpNumberSortValue(b.pumpNumber),
+  )[0];
+}
+
+/**
+ * Normalize GET /attendants/me/available-products for the sell flow.
+ * Uses assigned pumps only (redeem requires assignment).
+ */
 export function normalizeAvailableProducts(avail: Record<string, unknown> | null | undefined): AttendantBootstrap {
   const station = (avail?.station ?? null) as Record<string, unknown> | null;
   const stationId = (station?.id ?? avail?.stationId ?? null) as string | null;
@@ -121,6 +164,12 @@ export function normalizeAvailableProducts(avail: Record<string, unknown> | null
   const products = (Array.isArray(rawProducts) ? rawProducts : []).map((p) => ({
     id: String(p.id),
     name: String(p.name ?? p.productName ?? ''),
+    pricePerLiter:
+      p.pricePerLiter != null && p.pricePerLiter !== ''
+        ? (p.pricePerLiter as number | string)
+        : p.currentPrice != null && p.currentPrice !== ''
+          ? (p.currentPrice as number | string)
+          : null,
   }));
 
   const byId = new Map<string, AttendantPumpOption>();
@@ -129,19 +178,6 @@ export function normalizeAvailableProducts(avail: Record<string, unknown> | null
   for (const p of Array.isArray(assigned) ? assigned : []) {
     const mapped = mapPump(p);
     if (mapped) byId.set(mapped.id, mapped);
-  }
-
-  const dispensers = (station?.dispensers ?? avail?.dispensers ?? []) as Array<Record<string, unknown>>;
-  for (const d of Array.isArray(dispensers) ? dispensers : []) {
-    for (const p of (d?.pumps as Array<Record<string, unknown>>) || []) {
-      const mapped = mapPump(p, d);
-      if (mapped && !byId.has(mapped.id)) byId.set(mapped.id, mapped);
-    }
-  }
-
-  for (const p of Array.isArray(station?.pumps) ? (station!.pumps as Array<Record<string, unknown>>) : []) {
-    const mapped = mapPump(p);
-    if (mapped && !byId.has(mapped.id)) byId.set(mapped.id, mapped);
   }
 
   return { stationId, products, pumps: [...byId.values()] };

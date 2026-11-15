@@ -7,7 +7,9 @@ import {
   normalizeAvailableProducts,
   rejectToken,
   reserveToken,
+  resolvePumpForProduct,
   searchTokens,
+  type AttendantProductOption,
   type AttendantPumpOption,
 } from '@/api/attendant';
 import { createIdempotencyKey } from '@/api/idempotency';
@@ -19,7 +21,8 @@ import { useFeedback } from '@/context/FeedbackContext';
 import { useBidiTheme } from '@/context/ThemeContext';
 import type { Transaction } from '@/types';
 import { formatAxiosError } from '@/utils/apiMessage';
-import { formatDisplayMoney } from '@/utils/currency-display';
+import { formatDisplayMoney, tabularNumsStyle } from '@/utils/currency-display';
+import { toDisplayLocalPhone } from '@/utils/ghana-momo';
 import { hapticError, hapticSuccess } from '@/utils/haptics';
 import {
   isTerminalFulfillment,
@@ -33,6 +36,24 @@ function isTokenTerminal(txn: Transaction | null): boolean {
   return isTerminalFulfillment(txn.status);
 }
 
+function driverDisplayName(txn: Transaction): string {
+  const name = [txn.driver?.firstName, txn.driver?.lastName].filter(Boolean).join(' ').trim();
+  return name || 'N/A';
+}
+
+function driverDisplayPhone(txn: Transaction): string {
+  const phone = txn.driver?.phone?.trim();
+  if (!phone) return 'N/A';
+  return toDisplayLocalPhone(phone) || phone;
+}
+
+function formatLiters(value: number): string {
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
+  });
+}
+
 export default function SellPage() {
   const { tokens } = useBidiTheme();
   const { user } = useAuth();
@@ -40,8 +61,6 @@ export default function SellPage() {
   const { showConfirm } = useDialog();
 
   const [tokenInput, setTokenInput] = useState('');
-  const [productPickerVisible, setProductPickerVisible] = useState(false);
-  const [pumpPickerVisible, setPumpPickerVisible] = useState(false);
   const [scanVisible, setScanVisible] = useState(false);
 
   const [selectedProduct, setSelectedProduct] = useState('');
@@ -53,18 +72,21 @@ export default function SellPage() {
   } | null>(null);
   const [stationId, setStationId] = useState<string | null>(null);
   const [pumps, setPumps] = useState<AttendantPumpOption[]>([]);
-  const [productOptions, setProductOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [productOptions, setProductOptions] = useState<AttendantProductOption[]>([]);
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [litersLoading, setLitersLoading] = useState(false);
   const [completeLoading, setCompleteLoading] = useState(false);
   const [rejectLoading, setRejectLoading] = useState(false);
   const [fetched, setFetched] = useState<Transaction | null>(null);
   const [error, setError] = useState('');
   const [liters, setLiters] = useState<number | null>(null);
+  const [pricePerLiter, setPricePerLiter] = useState<number | string | null>(null);
   const [searchResults, setSearchResults] = useState<string[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const hasScannedRef = useRef(false);
+  const litersRequestRef = useRef(0);
   const reserveIdempotencyKey = useRef<string | null>(null);
   const confirmIdempotencyKey = useRef<string | null>(null);
   const rejectIdempotencyKey = useRef<string | null>(null);
@@ -81,6 +103,15 @@ export default function SellPage() {
   const handleOpenScanner = () => {
     hasScannedRef.current = false;
     setScanVisible(true);
+  };
+
+  const resetSelection = () => {
+    setSelectedProduct('');
+    setSelectedProductId(null);
+    setSelectedPump(null);
+    setLiters(null);
+    setPricePerLiter(null);
+    setLitersLoading(false);
   };
 
   useEffect(() => {
@@ -122,6 +153,13 @@ export default function SellPage() {
     void run();
   }, [user?.id, showMessage]);
 
+  const sellableProducts = useMemo(() => {
+    if (pumps.length === 0) return [];
+    return productOptions.filter((product) =>
+      Boolean(resolvePumpForProduct(pumps, product.id, product.name)),
+    );
+  }, [productOptions, pumps]);
+
   const handleLookup = async (overrideToken?: string) => {
     const token = (overrideToken ?? tokenInput).trim();
     if (!token) {
@@ -130,16 +168,21 @@ export default function SellPage() {
     }
     setError('');
     setFetched(null);
+    resetSelection();
     reserveIdempotencyKey.current = null;
     confirmIdempotencyKey.current = null;
     rejectIdempotencyKey.current = null;
     setLookupLoading(true);
     try {
       const data = (await getTokenDetails(token)) as Transaction;
-      setFetched(data);
       if (isTokenTerminal(data)) {
-        showMessage(`This token is ${tokenStatusLabel(data.status).toLowerCase()}.`);
+        await hapticError();
+        setError(
+          `This token is already ${tokenStatusLabel(data.status).toLowerCase()} and cannot be used.`,
+        );
+        return;
       }
+      setFetched(data);
     } catch {
       setError('Token not found. Please verify and try again.');
     } finally {
@@ -147,21 +190,52 @@ export default function SellPage() {
     }
   };
 
-  const handleCalculate = async () => {
-    if (!tokenInput.trim() || !selectedProduct) {
-      setError('Select product and enter token');
+  const handleSelectProduct = async (product: AttendantProductOption) => {
+    if (!fetched || !tokenInput.trim() || isTokenTerminal(fetched)) return;
+
+    const pump = resolvePumpForProduct(pumps, product.id, product.name);
+    setSelectedProduct(product.name);
+    setSelectedProductId(product.id);
+    setLiters(null);
+    setPricePerLiter(product.pricePerLiter ?? null);
+    setError('');
+
+    if (!pump || !pump.dispenserId) {
+      setSelectedPump(null);
+      setError(`No assigned pump for ${product.name}. Ask a manager to assign one.`);
       return;
     }
+
+    setSelectedPump({
+      id: pump.id,
+      pumpNumber: pump.pumpNumber,
+      dispenserId: pump.dispenserId,
+    });
+
+    const requestId = ++litersRequestRef.current;
+    setLitersLoading(true);
     try {
-      const res = (await calculateLiters(tokenInput.trim(), selectedProduct)) as
+      const res = (await calculateLiters(tokenInput.trim(), product.name)) as
         | number
-        | { liters?: number };
+        | {
+            liters?: number;
+            pricePerLiter?: number | string;
+          };
+      if (requestId !== litersRequestRef.current) return;
       const value = typeof res === 'number' ? res : res?.liters;
       if (value == null) throw new Error('Invalid response');
       setLiters(value);
-      showMessage(`Estimated ~${value} L`);
-    } catch {
-      setError('Failed to estimate liters');
+      if (typeof res === 'object' && res?.pricePerLiter != null) {
+        setPricePerLiter(res.pricePerLiter);
+      }
+    } catch (e: unknown) {
+      if (requestId !== litersRequestRef.current) return;
+      setLiters(null);
+      setError(formatAxiosError(e, 'Could not calculate liters for this product.'));
+    } finally {
+      if (requestId === litersRequestRef.current) {
+        setLitersLoading(false);
+      }
     }
   };
 
@@ -198,13 +272,13 @@ export default function SellPage() {
   }, [tokenInput]);
 
   const buildPayload = () => {
-    if (!selectedPump || !stationId || !selectedProductId) return null;
+    if (!selectedPump || !stationId || !selectedProductId || liters == null) return null;
     return {
       stationId,
       dispenserId: selectedPump.dispenserId,
       pumpId: selectedPump.id,
       productCatalogId: selectedProductId,
-      ...(liters != null ? { liters } : {}),
+      liters,
     };
   };
 
@@ -219,7 +293,11 @@ export default function SellPage() {
       return;
     }
     if (!selectedPump || !stationId) {
-      setError('Select a pump');
+      setError('No assigned pump for this product. Ask a manager to assign one.');
+      return;
+    }
+    if (liters == null) {
+      setError('Liters are still calculating. Wait a moment and try again.');
       return;
     }
     setError('');
@@ -243,10 +321,7 @@ export default function SellPage() {
       await hapticSuccess();
       showMessage('Transaction complete. Token redeemed.');
       setFetched({ ...fetched, status: 'REDEEMED' });
-      setSelectedProduct('');
-      setSelectedProductId(null);
-      setSelectedPump(null);
-      setLiters(null);
+      resetSelection();
       setTokenInput('');
     } catch (e: unknown) {
       await hapticError();
@@ -292,10 +367,7 @@ export default function SellPage() {
           (reason?.trim() ? reason.trim() : fetched.rejectionReason) ??
           null,
       });
-      setSelectedProduct('');
-      setSelectedProductId(null);
-      setSelectedPump(null);
-      setLiters(null);
+      resetSelection();
       setTokenInput('');
     } catch (e: unknown) {
       await hapticError();
@@ -322,25 +394,15 @@ export default function SellPage() {
   };
 
   const disabledComplete =
-    !fetched || isTokenTerminal(fetched) || !selectedProduct || !selectedPump;
+    !fetched ||
+    isTokenTerminal(fetched) ||
+    !selectedProduct ||
+    !selectedProductId ||
+    !selectedPump ||
+    liters == null ||
+    litersLoading;
   const disabledReject =
     !fetched || isTokenTerminal(fetched) || completeLoading || rejectLoading;
-
-  const pumpOptions = useMemo(() => {
-    if (!selectedProduct && !selectedProductId) return pumps;
-
-    const matched = pumps.filter((p) => {
-      if (selectedProductId && p.productCatalogId && p.productCatalogId === selectedProductId) {
-        return true;
-      }
-      if (selectedProduct && p.productName && p.productName === selectedProduct) {
-        return true;
-      }
-      return false;
-    });
-
-    return matched.length > 0 ? matched : pumps;
-  }, [pumps, selectedProduct, selectedProductId]);
 
   return (
     <div className="bidi-scroll-page" style={{ backgroundColor: tokens.surfaceBg }}>
@@ -452,6 +514,14 @@ export default function SellPage() {
                     <span style={{ color: tokens.textPrimary }}>{fetched.token || 'N/A'}</span>
                   </li>
                   <li>
+                    <span style={{ color: tokens.textTertiary }}>Driver</span>
+                    <span style={{ color: tokens.textPrimary }}>{driverDisplayName(fetched)}</span>
+                  </li>
+                  <li>
+                    <span style={{ color: tokens.textTertiary }}>Phone</span>
+                    <span style={{ color: tokens.textPrimary }}>{driverDisplayPhone(fetched)}</span>
+                  </li>
+                  <li>
                     <span style={{ color: tokens.textTertiary }}>Amount</span>
                     <span style={{ color: tokens.textPrimary }}>GHS {fetched.amount ?? 'N/A'}</span>
                   </li>
@@ -467,41 +537,81 @@ export default function SellPage() {
                   </li>
                 </ul>
 
-                <button
-                  type="button"
-                  className="bidi-btn bidi-btn--outline bidi-mt-3"
-                  onClick={() => setProductPickerVisible(true)}
+                <h3
+                  className="bidi-section-title bidi-mt-3"
+                  style={{ color: tokens.textPrimary, fontSize: '0.95rem' }}
                 >
-                  {selectedProduct || 'Select Product'}
-                </button>
+                  Product
+                </h3>
 
-                <button
-                  type="button"
-                  className="bidi-btn bidi-btn--outline bidi-mt-2"
-                  onClick={() => setPumpPickerVisible(true)}
-                  disabled={pumps.length === 0}
-                >
-                  {selectedPump ? `Pump ${selectedPump.pumpNumber}` : 'Select Pump'}
-                </button>
                 {pumps.length === 0 ? (
                   <p className="bidi-hint" style={{ color: tokens.textTertiary }}>
                     No pumps assigned to your account yet.
                   </p>
-                ) : null}
-
-                <button
-                  type="button"
-                  className="bidi-btn bidi-btn--secondary bidi-mt-3"
-                  onClick={() => void handleCalculate()}
-                  disabled={!selectedProduct || !tokenInput.trim()}
-                >
-                  Estimate Liters
-                </button>
-                {liters != null ? (
-                  <p className="bidi-hint bidi-mt-2" style={{ color: tokens.textSecondary }}>
-                    {`Approx. ${liters} L`}
+                ) : sellableProducts.length === 0 ? (
+                  <p className="bidi-hint" style={{ color: tokens.textTertiary }}>
+                    No products match your assigned pumps. Ask a manager to check assignments.
                   </p>
-                ) : null}
+                ) : (
+                  <div
+                    className="bidi-product-select"
+                    role="listbox"
+                    aria-label="Select fuel product"
+                    style={{ borderColor: tokens.divider, backgroundColor: tokens.surfaceSunken }}
+                  >
+                    {sellableProducts.map((item) => {
+                      const selected = selectedProductId === item.id;
+                      const displayPrice =
+                        selected && pricePerLiter != null
+                          ? pricePerLiter
+                          : item.pricePerLiter;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          className={
+                            selected
+                              ? 'bidi-product-select__item bidi-product-select__item--selected'
+                              : 'bidi-product-select__item'
+                          }
+                          style={{
+                            borderColor: selected ? tokens.brand.accent500 : 'transparent',
+                            backgroundColor: selected ? tokens.accentTint : 'transparent',
+                            color: tokens.textPrimary,
+                          }}
+                          onClick={() => void handleSelectProduct(item)}
+                          disabled={isTokenTerminal(fetched) || completeLoading || rejectLoading}
+                        >
+                          <span className="bidi-product-select__main">
+                            <span className="bidi-product-select__name">{item.name}</span>
+                            {displayPrice != null && displayPrice !== '' ? (
+                              <span
+                                className="bidi-product-select__price"
+                                style={{ ...tabularNumsStyle, color: tokens.textSecondary }}
+                              >
+                                {formatDisplayMoney(displayPrice)}/L
+                              </span>
+                            ) : null}
+                          </span>
+                          {selected ? (
+                            <span
+                              className="bidi-product-select__liters"
+                              style={{ ...tabularNumsStyle, color: tokens.textPrimary }}
+                            >
+                              {litersLoading
+                                ? 'Calculating…'
+                                : liters != null
+                                  ? `${formatLiters(liters)} L`
+                                  : '—'}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
                 <button
                   type="button"
@@ -524,64 +634,6 @@ export default function SellPage() {
           ) : null}
         </div>
       </div>
-
-      <Sheet open={productPickerVisible} onClose={() => setProductPickerVisible(false)} ariaLabel="Select product">
-        <div className="bidi-sheet-body">
-          <h2 className="bidi-sheet-title">Select Product</h2>
-          <div className="bidi-picker-list">
-            {productOptions.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className="bidi-picker-item"
-                onClick={() => {
-                  setSelectedProduct(item.name);
-                  setSelectedProductId(String(item.id));
-                  setProductPickerVisible(false);
-                  setSelectedPump(null);
-                  setLiters(null);
-                }}
-              >
-                {item.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      </Sheet>
-
-      <Sheet open={pumpPickerVisible} onClose={() => setPumpPickerVisible(false)} ariaLabel="Select pump">
-        <div className="bidi-sheet-body">
-          <h2 className="bidi-sheet-title">Select Pump</h2>
-          {pumpOptions.length === 0 ? (
-            <p className="bidi-sheet-message" style={{ color: tokens.textSecondary, textAlign: 'center' }}>
-              No pumps available. If pumps are assigned in the admin app, pull to refresh or re-login.
-            </p>
-          ) : (
-            <div className="bidi-picker-list">
-              {pumpOptions.map((item) => (
-                <button
-                  key={String(item.id)}
-                  type="button"
-                  className="bidi-picker-item"
-                  onClick={() => {
-                    setSelectedPump({
-                      id: String(item.id),
-                      pumpNumber: item.pumpNumber,
-                      dispenserId: String(item.dispenserId),
-                    });
-                    setPumpPickerVisible(false);
-                    setLiters(null);
-                  }}
-                >
-                  {`Pump ${item.pumpNumber}`}
-                  {item.dispenserNumber != null ? ` • Dispenser ${item.dispenserNumber}` : ''}
-                  {item.productName ? ` • ${item.productName}` : ''}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </Sheet>
 
       <Sheet open={scanVisible} onClose={() => setScanVisible(false)} ariaLabel="QR scanner">
         <QrScanner
