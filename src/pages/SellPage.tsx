@@ -73,6 +73,7 @@ export default function SellPage() {
   const [stationId, setStationId] = useState<string | null>(null);
   const [pumps, setPumps] = useState<AttendantPumpOption[]>([]);
   const [productOptions, setProductOptions] = useState<AttendantProductOption[]>([]);
+  const [pumpsLoadError, setPumpsLoadError] = useState<string | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [litersLoading, setLitersLoading] = useState(false);
   const [completeLoading, setCompleteLoading] = useState(false);
@@ -117,6 +118,7 @@ export default function SellPage() {
   useEffect(() => {
     const run = async () => {
       if (!user?.id) return;
+      setPumpsLoadError(null);
       try {
         const avail = await getAvailableProducts();
         let boot = normalizeAvailableProducts(avail as Record<string, unknown>);
@@ -144,10 +146,17 @@ export default function SellPage() {
         setProductOptions(boot.products);
         setPumps(boot.pumps);
         if (boot.pumps.length === 0) {
+          setPumpsLoadError(
+            'No pumps assigned to this attendant. Ask a manager to assign pumps.',
+          );
           showMessage('No pumps assigned to this attendant. Ask a manager to assign pumps.');
         }
       } catch (e) {
-        showMessage(formatAxiosError(e, 'Could not load station products'));
+        const message = formatAxiosError(e, 'Could not load station products');
+        setPumps([]);
+        setProductOptions([]);
+        setPumpsLoadError(message);
+        showMessage(message);
       }
     };
     void run();
@@ -544,7 +553,11 @@ export default function SellPage() {
                   Product
                 </h3>
 
-                {pumps.length === 0 ? (
+                {pumpsLoadError ? (
+                  <p className="bidi-field__error" role="alert">
+                    {pumpsLoadError}
+                  </p>
+                ) : pumps.length === 0 ? (
                   <p className="bidi-hint" style={{ color: tokens.textTertiary }}>
                     No pumps assigned to your account yet.
                   </p>
