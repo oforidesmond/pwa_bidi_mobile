@@ -1,5 +1,6 @@
 import { createIdempotencyKey } from '@/api/idempotency';
 import {
+  getPendingWalletFunding,
   getWalletBalance,
   getWalletFunding,
   startWalletFunding,
@@ -197,10 +198,55 @@ export function useWalletFunding({
     [onSettledSuccess],
   );
 
+  /**
+   * Adopt a backend PENDING row (e.g. USSD top-up) so the PWA can poll/reconcile
+   * even when this device never called POST /wallet/funding.
+   */
+  const adoptBackendPending = useCallback(
+    async (baselineAvailable: number): Promise<boolean> => {
+      if (pendingRef.current) return false;
+      try {
+        const row = await getPendingWalletFunding();
+        if (!row?.id) return false;
+        if (isFundingSuccessful(row.status) || isTerminalFundingFailure(row.status)) {
+          return false;
+        }
+        const amount = parseBalance(row.amount);
+        const provider = (row.provider ?? 'MTN_MOMO') as FundingProvider;
+        const pending: PendingFunding = {
+          fundingId: row.id,
+          amount: Number.isFinite(amount) ? amount : 0,
+          provider,
+          phone: typeof row.phone === 'string' ? row.phone : '',
+          baselineAvailable,
+          submittedAt: row.createdAt ? Date.parse(row.createdAt) || Date.now() : Date.now(),
+          nextAction: normalizeFundingNextAction(row.nextAction),
+          displayText: row.displayText ?? null,
+          transferInstructions: row.transferInstructions ?? null,
+        };
+        pendingRef.current = pending;
+        setPendingFunding(pending);
+        setPendingExpired(isPendingFundingExpired(pending.submittedAt));
+        await persistPending(pending);
+        if (normalizeFundingNextAction(pending.nextAction) === 'submit_otp') {
+          setOtpSheetOpen(true);
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [persistPending],
+  );
+
   const loadBalance = useCallback(async () => {
     try {
+      // Backend reconciles USSD PENDING charges on this call before returning balance.
       const data = await getWalletBalance();
-      await applyBalance(data);
+      const settled = await applyBalance(data);
+      if (!settled && !pendingRef.current) {
+        await adoptBackendPending(parseBalance(data.availableBalance));
+      }
       return data;
     } catch (e) {
       showMessage(formatAxiosError(e, 'Could not load wallet balance'));
@@ -209,7 +255,7 @@ export function useWalletFunding({
       setBalanceLoading(false);
       setRefreshing(false);
     }
-  }, [applyBalance, showMessage]);
+  }, [adoptBackendPending, applyBalance, showMessage]);
 
   const finishSuccessful = useCallback(
     async (pending: PendingFunding) => {
@@ -318,7 +364,7 @@ export function useWalletFunding({
   const checkFundingStatusRef = useRef(checkFundingStatus);
   checkFundingStatusRef.current = checkFundingStatus;
 
-  // Hydrate persisted pending, then immediately resolve terminal status if any.
+  // Hydrate persisted pending (or discover USSD pending), then resolve status.
   useEffect(() => {
     if (!userId) {
       setPendingFunding(null);
@@ -332,28 +378,39 @@ export function useWalletFunding({
       try {
         const raw = await storage.getItem(pendingFundingStorageKey(userId));
         if (cancelled) return;
-        if (!raw) return;
-        const parsed: unknown = JSON.parse(raw);
-        if (!isValidPendingFunding(parsed)) {
-          await storage.removeItem(pendingFundingStorageKey(userId));
-          return;
+        if (raw) {
+          const parsed: unknown = JSON.parse(raw);
+          if (!isValidPendingFunding(parsed)) {
+            await storage.removeItem(pendingFundingStorageKey(userId));
+          } else {
+            setPendingFunding(parsed);
+            setPendingExpired(isPendingFundingExpired(parsed.submittedAt));
+            pendingRef.current = parsed;
+            if (normalizeFundingNextAction(parsed.nextAction) === 'submit_otp') {
+              setOtpSheetOpen(true);
+            }
+            await checkFundingStatusRef.current();
+            return;
+          }
         }
-        setPendingFunding(parsed);
-        setPendingExpired(isPendingFundingExpired(parsed.submittedAt));
-        pendingRef.current = parsed;
-        if (normalizeFundingNextAction(parsed.nextAction) === 'submit_otp') {
-          setOtpSheetOpen(true);
+        // No local pending — pick up an in-flight USSD (or other-device) top-up.
+        const balance = await getWalletBalance().catch(() => null);
+        if (cancelled || pendingRef.current) return;
+        const baseline = balance ? parseBalance(balance.availableBalance) : 0;
+        if (balance) setWallet(balance);
+        const adopted = await adoptBackendPending(baseline);
+        if (adopted && !cancelled) {
+          await checkFundingStatusRef.current();
         }
-        await checkFundingStatusRef.current();
       } catch {
-        // Ignore corrupt storage.
+        // Ignore corrupt storage / network.
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, adoptBackendPending]);
 
   useEffect(() => {
     if (!userId) return;

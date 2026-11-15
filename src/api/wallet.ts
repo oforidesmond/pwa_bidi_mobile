@@ -45,6 +45,19 @@ export const getWalletFunding = async (fundingId: string): Promise<WalletFunding
 };
 
 /**
+ * Latest PENDING funding for this driver (USSD or app). Backend reconciles with
+ * Paystack first. Null when there is no open top-up.
+ */
+export const getPendingWalletFunding = async (): Promise<WalletFunding | null> => {
+  const response = await api.get('/wallet/funding/pending');
+  const data = response.data;
+  if (!data || typeof data !== 'object' || !('id' in data) || !data.id) {
+    return null;
+  }
+  return data as WalletFunding;
+};
+
+/**
  * Forward a Paystack SMS code. Not the MoMo PIN.
  * Pass a new Idempotency-Key for every attempt — reusing a key with a different code is 422.
  */
